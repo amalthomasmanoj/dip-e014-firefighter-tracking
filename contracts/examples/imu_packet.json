@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "node_id": "wearable_01",
+  "sequence_number": 1001,
+  "timestamp_us": 123456789,
+  "type": "imu",
+  "data": {
+    "ax_mps2": 0.12,
+    "ay_mps2": -0.03,
+    "az_mps2": 9.78,
+    "gx_radps": 0.01,
+    "gy_radps": -0.02,
+    "gz_radps": 0.1
+  }
+}
+

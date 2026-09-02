@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/dip-e014/packet_schema.json",
+  "title": "Sensor Packet",
+  "type": "object",
+  "required": ["version", "node_id", "sequence_number", "timestamp_us", "type", "data"],
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "node_id": { "type": "string", "minLength": 1 },
+    "sequence_number": { "type": "integer", "minimum": 0 },
+    "timestamp_us": { "type": "integer", "minimum": 0 },
+    "type": { "type": "string", "enum": ["imu", "uwb_range"] },
+    "data": {
+      "oneOf": [
+        { "$ref": "#/$defs/imu_data" },
+        { "$ref": "#/$defs/uwb_range_data" }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "const": "imu" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/imu_data" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "uwb_range" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/uwb_range_data" } } }
+    }
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "imu_data": {
+      "type": "object",
+      "required": ["ax_mps2", "ay_mps2", "az_mps2", "gx_radps", "gy_radps", "gz_radps"],
+      "properties": {
+        "ax_mps2": { "type": "number" },
+        "ay_mps2": { "type": "number" },
+        "az_mps2": { "type": "number" },
+        "gx_radps": { "type": "number" },
+        "gy_radps": { "type": "number" },
+        "gz_radps": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+    "uwb_range_data": {
+      "type": "object",
+      "required": ["anchor_id", "range_m", "valid", "quality"],
+      "properties": {
+        "anchor_id": { "type": "string", "minLength": 1 },
+        "range_m": { "type": "number", "minimum": 0 },
+        "valid": { "type": "boolean" },
+        "quality": { "type": ["number", "null"] }
+      },
+      "additionalProperties": false
+    }
+  }
+}
+

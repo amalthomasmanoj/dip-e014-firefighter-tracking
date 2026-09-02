@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dip-e014-firefighter-tracking"
+version = "0.1.0"
+description = "Bootstrap monorepo for E014 wearable indoor firefighter trajectory tracking."
+requires-python = ">=3.11"
+dependencies = [
+  "numpy",
+  "scipy",
+  "pydantic",
+  "fastapi",
+  "uvicorn",
+  "websockets",
+  "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "jsonschema",
+  "ruff",
+]
+
+[tool.setuptools.packages.find]
+include = ["backend*", "tools*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

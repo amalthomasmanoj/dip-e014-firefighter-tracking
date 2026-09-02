@@ -1,0 +1,10 @@
+/contracts/                    @software-lead @embedded-lead
+/docs/coordinate_frames.md     @software-lead @fusion-lead
+/firmware/                     @embedded-lead
+/backend/imu/                  @imu-lead
+/backend/uwb/                  @uwb-lead
+/backend/fusion/               @fusion-lead
+/backend/logging/              @logging-lead
+/backend/api/                  @backend-lead
+/ui/                           @frontend-lead
+

@@ -1,0 +1,9 @@
+estimator:
+  mode: simulation
+  fusion: placeholder
+  publish_rate_hz: 10
+  initial_uncertainty_m:
+    x: 0.2
+    y: 0.2
+    z: 1.0
+

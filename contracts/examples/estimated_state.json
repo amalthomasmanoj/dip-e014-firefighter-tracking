@@ -1,0 +1,29 @@
+{
+  "timestamp_us": 123466789,
+  "position_m": {
+    "x": 4.1,
+    "y": 2.8,
+    "z": 0.0
+  },
+  "velocity_mps": {
+    "x": 0.8,
+    "y": 0.1,
+    "z": 0.0
+  },
+  "orientation_xyzw": {
+    "x": 0.0,
+    "y": 0.0,
+    "z": 0.2,
+    "w": 0.98
+  },
+  "uncertainty": {
+    "sigma_x_m": 0.2,
+    "sigma_y_m": 0.3,
+    "sigma_z_m": 1.0
+  },
+  "status": {
+    "zupt_active": false,
+    "uwb_available": true,
+    "active_anchor_count": 3
+  }
+}

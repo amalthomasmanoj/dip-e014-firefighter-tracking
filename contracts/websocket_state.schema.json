@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/dip-e014/websocket_state.schema.json",
+  "title": "WebSocket State Message",
+  "type": "object",
+  "required": ["type", "source", "state"],
+  "properties": {
+    "type": { "type": "string", "const": "estimated_state" },
+    "source": { "type": "string", "enum": ["simulation", "live", "replay"] },
+    "state": { "$ref": "estimated_state.schema.json" }
+  },
+  "additionalProperties": false
+}
+

@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/dip-e014/estimated_state.schema.json",
+  "title": "Estimated State",
+  "type": "object",
+  "required": [
+    "timestamp_us",
+    "position_m",
+    "velocity_mps",
+    "orientation_xyzw",
+    "uncertainty",
+    "status"
+  ],
+  "properties": {
+    "timestamp_us": { "type": "integer", "minimum": 0 },
+    "position_m": { "$ref": "#/$defs/vector3" },
+    "velocity_mps": { "$ref": "#/$defs/vector3" },
+    "orientation_xyzw": {
+      "type": "object",
+      "required": ["x", "y", "z", "w"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" },
+        "w": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+    "uncertainty": {
+      "type": "object",
+      "required": ["sigma_x_m", "sigma_y_m", "sigma_z_m"],
+      "properties": {
+        "sigma_x_m": { "type": "number", "minimum": 0 },
+        "sigma_y_m": { "type": "number", "minimum": 0 },
+        "sigma_z_m": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "status": {
+      "type": "object",
+      "required": ["zupt_active", "uwb_available", "active_anchor_count"],
+      "properties": {
+        "zupt_active": { "type": "boolean" },
+        "uwb_available": { "type": "boolean" },
+        "active_anchor_count": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "vector3": {
+      "type": "object",
+      "required": ["x", "y", "z"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" }
+      },
+      "additionalProperties": false
+    }
+  }
+}
+

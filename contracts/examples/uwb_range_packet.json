@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "node_id": "wearable_01",
+  "sequence_number": 1002,
+  "timestamp_us": 123466789,
+  "type": "uwb_range",
+  "data": {
+    "anchor_id": "A1",
+    "range_m": 4.23,
+    "valid": true,
+    "quality": null
+  }
+}
+

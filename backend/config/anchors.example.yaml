@@ -1,0 +1,14 @@
+anchors:
+  - anchor_id: A1
+    x_m: 0.0
+    y_m: 0.0
+    z_m: 0.0
+  - anchor_id: A2
+    x_m: 8.0
+    y_m: 0.0
+    z_m: 0.0
+  - anchor_id: A3
+    x_m: 0.0
+    y_m: 6.0
+    z_m: 0.0
+

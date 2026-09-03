@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { fetchAnchors } from "./api/anchors";
 import { connectStateStream } from "./api/websocket";
 import { BuildingMap } from "./components/BuildingMap/BuildingMap";
 import { ExperimentPlot } from "./components/ExperimentPlot";
@@ -6,15 +7,22 @@ import { SensorStatus } from "./components/SensorStatus";
 import { StatePanel } from "./components/StatePanel";
 import { Anchor, EstimatedState } from "./types/state";
 
-const anchors: Anchor[] = [
+const fallbackAnchors: Anchor[] = [
   { anchor_id: "A1", x_m: 0, y_m: 0, z_m: 0 },
   { anchor_id: "A2", x_m: 8, y_m: 0, z_m: 0 },
   { anchor_id: "A3", x_m: 0, y_m: 6, z_m: 0 },
 ];
 
 export default function App() {
+  const [anchors, setAnchors] = useState<Anchor[]>(fallbackAnchors);
   const [connected, setConnected] = useState(false);
   const [trajectory, setTrajectory] = useState<EstimatedState[]>([]);
+
+  useEffect(() => {
+    fetchAnchors()
+      .then(setAnchors)
+      .catch(() => setAnchors(fallbackAnchors));
+  }, []);
 
   useEffect(() => {
     const socket = connectStateStream((message) => {
@@ -45,4 +53,3 @@ export default function App() {
     </main>
   );
 }
-

@@ -21,25 +21,24 @@ def world_to_map(
     s = math.sin(rotation_rad)
     return (
         scale * (c * position[0] - s * position[1]) + translate[0],
-        scale * (s * position[0] + c * position[1]) + translate[1],
+        translate[1] - scale * (s * position[0] + c * position[1]),
     )
 
 
 def test_world_to_map_translation() -> None:
-    assert world_to_map((1, 2), scale=1, rotation_rad=0, translate=(10, 20)) == (11, 22)
+    assert world_to_map((1, 2), scale=1, rotation_rad=0, translate=(10, 20)) == (11, 18)
 
 
 def test_world_to_map_scale() -> None:
-    assert world_to_map((2, 3), scale=4, rotation_rad=0, translate=(0, 0)) == (8, 12)
+    assert world_to_map((2, 3), scale=4, rotation_rad=0, translate=(0, 40)) == (8, 28)
 
 
 def test_world_to_map_rotation() -> None:
     x, y = world_to_map((1, 0), scale=1, rotation_rad=math.pi / 2, translate=(0, 0))
     assert x == pytest.approx(0)
-    assert y == pytest.approx(1)
+    assert y == pytest.approx(-1)
 
 
 def test_invalid_transform_rejected() -> None:
     with pytest.raises(ValueError):
         world_to_map((1, 2), scale=0, rotation_rad=0, translate=(0, 0))
-

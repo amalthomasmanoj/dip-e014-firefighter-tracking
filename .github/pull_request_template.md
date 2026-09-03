@@ -3,6 +3,7 @@
 ## Testing
 
 - [ ] `pytest`
+- [ ] `cd ui/web && npm test`
 - [ ] `cd ui/web && npm run build`
 
 ## Contract Changes
@@ -15,4 +16,3 @@
 - [ ] No credentials committed
 - [ ] No large recordings/log files committed
 - [ ] Architecture boundaries preserved
-

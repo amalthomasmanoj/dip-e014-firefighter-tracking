@@ -54,6 +54,7 @@ The UI expects the backend WebSocket at `ws://localhost:8000/ws/state` by defaul
 Build:
 
 ```bash
+npm test
 npm run build
 ```
 
@@ -81,4 +82,3 @@ Important boundaries:
 - M5: baseline fusion.
 - M6: failure experiments.
 - M7: final product UI / replay.
-

@@ -36,7 +36,7 @@ export function worldToMap(position: WorldPoint, transform: MapTransform): World
   const s = Math.sin(transform.rotationRad);
   return {
     x: transform.scale * (c * position.x - s * position.y) + transform.translateX,
-    y: transform.scale * (s * position.x + c * position.y) + transform.translateY,
+    y: transform.translateY - transform.scale * (s * position.x + c * position.y),
   };
 }
 
@@ -47,12 +47,11 @@ export function mapToWorld(position: WorldPoint, transform: MapTransform): World
   }
 
   const x = (position.x - transform.translateX) / transform.scale;
-  const y = (position.y - transform.translateY) / transform.scale;
-  const c = Math.cos(-transform.rotationRad);
-  const s = Math.sin(-transform.rotationRad);
+  const y = (transform.translateY - position.y) / transform.scale;
+  const c = Math.cos(transform.rotationRad);
+  const s = Math.sin(transform.rotationRad);
   return {
-    x: c * x - s * y,
-    y: s * x + c * y,
+    x: c * x + s * y,
+    y: -s * x + c * y,
   };
 }
-

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Any, Literal
 
 
@@ -38,7 +39,17 @@ def _require_number(data: dict[str, Any], key: str) -> float:
     value = data.get(key)
     if not isinstance(value, int | float) or isinstance(value, bool):
         raise ValueError(f"field {key!r} must be numeric")
-    return float(value)
+    value = float(value)
+    if not math.isfinite(value):
+        raise ValueError(f"field {key!r} must be finite")
+    return value
+
+
+def _require_non_negative_number(data: dict[str, Any], key: str) -> float:
+    value = _require_number(data, key)
+    if value < 0.0:
+        raise ValueError(f"field {key!r} must be non-negative")
+    return value
 
 
 def measurement_from_packet(packet: dict[str, Any]) -> Measurement:
@@ -76,13 +87,14 @@ def measurement_from_packet(packet: dict[str, Any]) -> Measurement:
             not isinstance(quality, int | float) or isinstance(quality, bool)
         ):
             raise ValueError("quality must be numeric or null")
+        if quality is not None and not math.isfinite(float(quality)):
+            raise ValueError("quality must be finite or null")
         return UwbRangeMeasurement(
             **base,
             anchor_id=anchor_id,
-            range_m=_require_number(data, "range_m"),
+            range_m=_require_non_negative_number(data, "range_m"),
             valid=valid,
             quality=None if quality is None else float(quality),
         )
 
     raise ValueError(f"unsupported packet type {packet_type!r}")
-

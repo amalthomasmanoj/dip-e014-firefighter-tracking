@@ -40,3 +40,15 @@ time transport     integer microseconds
 
 Transport timestamps are integer microseconds. Estimator internals may convert time deltas to seconds.
 
+## SVG Map Display
+
+SVG screen coordinates use `+x` to the right and `+y` downward. The project world frame uses `+z` upward and the local map convention treats increasing world `y` as left/north-like/up on the display.
+
+For the default blank XY display, convert world to SVG with an inverted display y-axis:
+
+```text
+u = u0 + s x
+v = v0 - s y
+```
+
+The calibrated map transform may include rotation and translation, but it must preserve this explicit world-frame to display-frame conversion rather than silently treating SVG `+y` as world `+y`.

@@ -52,6 +52,27 @@ def test_unit_field_names_are_required() -> None:
         parse_packet(packet)
 
 
+def test_negative_uwb_range_rejected() -> None:
+    packet = load_example("uwb_range_packet.json")
+    packet["data"]["range_m"] = -4.2
+    with pytest.raises(ValueError, match="range_m"):
+        parse_packet(packet)
+
+
+def test_non_finite_values_rejected() -> None:
+    packet = load_example("imu_packet.json")
+    packet["data"]["ax_mps2"] = float("nan")
+    with pytest.raises(ValueError, match="finite"):
+        parse_packet(packet)
+
+
+def test_non_finite_quality_rejected() -> None:
+    packet = load_example("uwb_range_packet.json")
+    packet["data"]["quality"] = float("inf")
+    with pytest.raises(ValueError, match="quality"):
+        parse_packet(packet)
+
+
 def test_sequence_gap_and_out_of_order_detected() -> None:
     tracker = SequenceTracker()
     assert not tracker.observe("wearable_01", 10).gap_detected
@@ -60,4 +81,3 @@ def test_sequence_gap_and_out_of_order_detected() -> None:
     assert gap.expected_sequence_number == 11
     old = tracker.observe("wearable_01", 11)
     assert old.out_of_order
-

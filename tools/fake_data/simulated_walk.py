@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+if __package__ is None or __package__ == "":
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 import argparse
 import json
 import math
@@ -12,6 +18,15 @@ from backend.models.state import (
     Uncertainty,
     Vector3,
 )
+from tools.fake_data.sensor_packets import (
+    DEFAULT_DT_S,
+    DEFAULT_START_US,
+    path_pose,
+    simulated_imu_packet_stream,
+    simulated_mixed_packet_stream,
+    simulated_uwb_range_packet_stream,
+    timestamp_for_index,
+)
 
 
 def _heading_to_quaternion(yaw_rad: float) -> Quaternion:
@@ -19,35 +34,13 @@ def _heading_to_quaternion(yaw_rad: float) -> Quaternion:
     return Quaternion(x=0.0, y=0.0, z=math.sin(half), w=math.cos(half))
 
 
-def simulated_state_stream(sample_count: int = 90, dt_s: float = 0.1) -> Iterator[EstimatedState]:
-    start_us = 1_000_000
+def simulated_state_stream(sample_count: int = 90, dt_s: float = DEFAULT_DT_S) -> Iterator[EstimatedState]:
     for index in range(sample_count):
-        t = index * dt_s
-        if t < 3.0:
-            x = 1.0 + 0.8 * t
-            y = 1.0
-            vx = 0.8
-            vy = 0.0
-            yaw = 0.0
-            stopped = False
-        elif t < 6.0:
-            x = 3.4
-            y = 1.0 + 0.7 * (t - 3.0)
-            vx = 0.0
-            vy = 0.7
-            yaw = math.pi / 2.0
-            stopped = False
-        else:
-            x = 3.4
-            y = 3.1
-            vx = 0.0
-            vy = 0.0
-            yaw = math.pi / 2.0
-            stopped = True
+        x, y, vx, vy, yaw, stopped = path_pose(index=index, dt_s=dt_s)
 
         uncertainty = 0.2 + 0.005 * index
         yield EstimatedState(
-            timestamp_us=start_us + int(t * 1_000_000),
+            timestamp_us=timestamp_for_index(index=index, start_us=DEFAULT_START_US, dt_s=dt_s),
             position_m=Vector3(x=x, y=y, z=0.0),
             velocity_mps=Vector3(x=vx, y=vy, z=0.0),
             orientation_xyzw=_heading_to_quaternion(yaw),
@@ -67,11 +60,28 @@ def simulated_state_stream(sample_count: int = 90, dt_s: float = 0.1) -> Iterato
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--count", type=int, default=10)
+    parser.add_argument(
+        "--kind",
+        choices=("state", "imu", "uwb", "mixed"),
+        default="state",
+        help="fake output kind: estimated state or contract sensor packets",
+    )
     args = parser.parse_args()
-    for state in simulated_state_stream(sample_count=args.count):
-        print(json.dumps(state.to_dict()))
+    if args.kind == "state":
+        for state in simulated_state_stream(sample_count=args.count):
+            print(json.dumps(state.to_dict()))
+        return
+
+    if args.kind == "imu":
+        stream = simulated_imu_packet_stream(packet_count=args.count)
+    elif args.kind == "uwb":
+        stream = simulated_uwb_range_packet_stream(packet_count=args.count)
+    else:
+        stream = simulated_mixed_packet_stream(packet_count=args.count)
+
+    for packet in stream:
+        print(json.dumps(packet))
 
 
 if __name__ == "__main__":
     main()
-

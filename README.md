@@ -35,6 +35,16 @@ Run the fake-data backend:
 uvicorn backend.api.app:app --reload
 ```
 
+The backend defaults to fake simulation data. Select a startup source with:
+
+```bash
+E014_SOURCE=simulation uvicorn backend.api.app:app --reload
+```
+
+Supported source modes are `simulation`, `udp`, and `replay`. `udp` and `replay`
+are accepted startup modes, but their production pipelines are placeholders until
+hardware ingestion and recorded replay are implemented.
+
 WebSocket endpoint:
 
 ```text

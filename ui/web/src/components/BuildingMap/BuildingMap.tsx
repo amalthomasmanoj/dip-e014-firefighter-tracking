@@ -12,10 +12,10 @@ type Props = {
 };
 
 const transform: MapTransform = {
-  scale: 70,
+  scale: 50,
   rotationRad: 0,
   translateX: 72,
-  translateY: 360,
+  translateY: 390,
 };
 
 export function BuildingMap({ anchors, currentState, trajectory }: Props) {
@@ -51,4 +51,3 @@ export function BuildingMap({ anchors, currentState, trajectory }: Props) {
     </section>
   );
 }
-

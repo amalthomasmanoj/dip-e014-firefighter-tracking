@@ -18,6 +18,8 @@ const transform: MapTransform = {
   translateY: 390,
 };
 
+const axisOrigin = worldToMap({ x: 0, y: 0 }, transform);
+
 export function BuildingMap({ anchors, currentState, trajectory }: Props) {
   const responderPoint = currentState
     ? worldToMap({ x: currentState.position_m.x, y: currentState.position_m.y }, transform)
@@ -32,8 +34,8 @@ export function BuildingMap({ anchors, currentState, trajectory }: Props) {
           </pattern>
         </defs>
         <rect width="720" height="460" fill="url(#grid)" />
-        <line className="axis-line" x1="72" y1="360" x2="650" y2="360" />
-        <line className="axis-line" x1="72" y1="360" x2="72" y2="58" />
+        <line className="axis-line" x1={axisOrigin.x} y1={axisOrigin.y} x2="650" y2={axisOrigin.y} />
+        <line className="axis-line" x1={axisOrigin.x} y1={axisOrigin.y} x2={axisOrigin.x} y2="58" />
         <AnchorLayer anchors={anchors} transform={transform} />
         <TrajectoryLayer states={trajectory} transform={transform} />
         {currentState && responderPoint ? (
@@ -44,7 +46,12 @@ export function BuildingMap({ anchors, currentState, trajectory }: Props) {
               cy={responderPoint.y}
               transform={transform}
             />
-            <ResponderMarker state={currentState} cx={responderPoint.x} cy={responderPoint.y} />
+            <ResponderMarker
+              state={currentState}
+              cx={responderPoint.x}
+              cy={responderPoint.y}
+              transform={transform}
+            />
           </>
         ) : null}
       </svg>

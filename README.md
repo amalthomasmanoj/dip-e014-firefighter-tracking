@@ -46,6 +46,8 @@ generates generic fake IMU/UWB packets and estimates state through the backend
 pipeline. `udp` listens for generic sensor packets on UDP port `9000`, estimates
 state, and streams it to the UI as `live`. `replay` is accepted as a startup
 mode, but recorded replay is a placeholder until MCAP replay is implemented.
+In live mode, IMU-only packets still publish a held-position state for hardware
+bring-up; UWB range packets are required for absolute movement through the map.
 
 WebSocket endpoint:
 

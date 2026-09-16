@@ -31,9 +31,11 @@ class DemoSensorEstimator:
         self,
         anchors: Sequence[Anchor] = DEFAULT_ANCHORS,
         range_stale_after_us: int = 500_000,
+        emit_imu_only_state: bool = True,
     ) -> None:
         self._anchors = list(anchors)
         self._range_stale_after_us = range_stale_after_us
+        self._emit_imu_only_state = emit_imu_only_state
         self._latest_ranges: dict[str, float] = {}
         self._range_timestamps: dict[str, int] = {}
         self._imu_window: deque[ImuMeasurement] = deque(maxlen=5)
@@ -47,7 +49,9 @@ class DemoSensorEstimator:
     def update(self, measurement: Measurement) -> EstimatedState | None:
         if isinstance(measurement, ImuMeasurement):
             self._observe_imu(measurement)
-            return None
+            if not self._emit_imu_only_state:
+                return None
+            return self._state_from_imu_only(timestamp_us=measurement.timestamp_us)
 
         if isinstance(measurement, UwbRangeMeasurement):
             return self._observe_uwb(measurement)
@@ -92,20 +96,68 @@ class DemoSensorEstimator:
         self._last_position = (x_m, y_m)
         self._last_position_timestamp_us = measurement.timestamp_us
 
-        zupt_active = detect_zupt_window(self._imu_window) if self._imu_window else False
         speed_mps = math.hypot(velocity_x_mps, velocity_y_mps)
-        activity = self._activity_state(speed_mps=speed_mps, zupt_active=zupt_active)
         residual_m = self._mean_range_residual(point=(x_m, y_m), ranges=fresh_ranges)
         self._uncertainty_m = max(0.15, min(5.0, 0.2 + residual_m))
 
-        return EstimatedState(
+        return self._build_state(
             timestamp_us=measurement.timestamp_us,
+            x_m=x_m,
+            y_m=y_m,
+            velocity_x_mps=velocity_x_mps,
+            velocity_y_mps=velocity_y_mps,
+            speed_mps=speed_mps,
+            fresh_ranges=fresh_ranges,
+            sigma_x_m=self._uncertainty_m,
+            sigma_y_m=self._uncertainty_m * 1.2,
+        )
+
+    def _state_from_imu_only(self, timestamp_us: int) -> EstimatedState:
+        fresh_ranges = self._fresh_ranges(timestamp_us)
+        x_m = 0.0
+        y_m = 0.0
+        if self._last_position is not None:
+            x_m, y_m = self._last_position
+
+        sigma_x_m = 5.0 if self._last_position is None else min(5.0, self._uncertainty_m + 0.5)
+        sigma_y_m = sigma_x_m
+
+        return self._build_state(
+            timestamp_us=timestamp_us,
+            x_m=x_m,
+            y_m=y_m,
+            velocity_x_mps=0.0,
+            velocity_y_mps=0.0,
+            speed_mps=0.0,
+            fresh_ranges=fresh_ranges,
+            sigma_x_m=sigma_x_m,
+            sigma_y_m=sigma_y_m,
+        )
+
+    def _build_state(
+        self,
+        *,
+        timestamp_us: int,
+        x_m: float,
+        y_m: float,
+        velocity_x_mps: float,
+        velocity_y_mps: float,
+        speed_mps: float,
+        fresh_ranges: dict[str, float],
+        sigma_x_m: float,
+        sigma_y_m: float,
+    ) -> EstimatedState:
+        zupt_active = detect_zupt_window(self._imu_window) if self._imu_window else False
+        activity = self._activity_state(speed_mps=speed_mps, zupt_active=zupt_active)
+
+        return EstimatedState(
+            timestamp_us=timestamp_us,
             position_m=Vector3(x=x_m, y=y_m, z=0.0),
             velocity_mps=Vector3(x=velocity_x_mps, y=velocity_y_mps, z=0.0),
             orientation_xyzw=self._heading_to_quaternion(self._yaw_rad),
             uncertainty=Uncertainty(
-                sigma_x_m=self._uncertainty_m,
-                sigma_y_m=self._uncertainty_m * 1.2,
+                sigma_x_m=sigma_x_m,
+                sigma_y_m=sigma_y_m,
                 sigma_z_m=1.0,
             ),
             status=SensorStatus(

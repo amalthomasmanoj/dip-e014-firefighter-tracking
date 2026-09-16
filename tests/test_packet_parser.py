@@ -9,7 +9,6 @@ from backend.ingestion.parser import parse_packet
 from backend.ingestion.sequencing import SequenceTracker
 from backend.models.measurements import ImuMeasurement, UwbRangeMeasurement
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -22,6 +21,33 @@ def test_valid_imu_packet_parses() -> None:
     assert isinstance(measurement, ImuMeasurement)
     assert measurement.ax_mps2 == pytest.approx(0.12)
     assert measurement.gz_radps == pytest.approx(0.1)
+
+
+def test_esp32_lab_imu_packet_parses() -> None:
+    packet = {
+        "version": 1,
+        "node_id": "esp32_lab_01",
+        "sequence_number": 102489,
+        "timestamp_us": 123456789,
+        "type": "imu",
+        "data": {
+            "ax_mps2": -1.74,
+            "ay_mps2": 0.00,
+            "az_mps2": 9.73,
+            "gx_radps": -0.029,
+            "gy_radps": 0.049,
+            "gz_radps": -0.044,
+        },
+    }
+
+    measurement = parse_packet(packet)
+
+    assert isinstance(measurement, ImuMeasurement)
+    assert measurement.node_id == "esp32_lab_01"
+    assert measurement.sequence_number == 102489
+    assert measurement.ax_mps2 == pytest.approx(-1.74)
+    assert measurement.az_mps2 == pytest.approx(9.73)
+    assert measurement.gz_radps == pytest.approx(-0.044)
 
 
 def test_valid_uwb_packet_parses() -> None:

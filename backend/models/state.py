@@ -33,6 +33,13 @@ class SensorStatus:
 
 
 @dataclass(frozen=True)
+class ActivityState:
+    posture: str
+    motion: str
+    confidence: float
+
+
+@dataclass(frozen=True)
 class EstimatedState:
     timestamp_us: int
     position_m: Vector3
@@ -40,6 +47,7 @@ class EstimatedState:
     orientation_xyzw: Quaternion
     uncertainty: Uncertainty
     status: SensorStatus
+    activity: ActivityState
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -51,4 +59,3 @@ def websocket_message(state: EstimatedState, source: str = "simulation") -> dict
         "source": source,
         "state": state.to_dict(),
     }
-

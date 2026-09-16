@@ -24,6 +24,11 @@ function stateWithYaw(yawRad: number): EstimatedState {
       uwb_available: true,
       active_anchor_count: 3,
     },
+    activity: {
+      posture: "standing",
+      motion: "stationary",
+      confidence: 0.9,
+    },
   };
 }
 

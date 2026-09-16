@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { fetchAnchors } from "./api/anchors";
 import { connectStateStream } from "./api/websocket";
 import { BuildingMap } from "./components/BuildingMap/BuildingMap";
+import { DigitalTwinView } from "./components/DigitalTwinView";
 import { ExperimentPlot } from "./components/ExperimentPlot";
 import { SensorStatus } from "./components/SensorStatus";
 import { StatePanel } from "./components/StatePanel";
@@ -43,7 +44,10 @@ export default function App() {
         <span className={connected ? "status-pill live" : "status-pill"}>{connected ? "LIVE" : "OFFLINE"}</span>
       </header>
       <div className="workspace">
-        <BuildingMap anchors={anchors} currentState={currentState} trajectory={trajectory} />
+        <div className="main-views">
+          <DigitalTwinView anchors={anchors} state={currentState} trajectory={trajectory} />
+          <BuildingMap anchors={anchors} currentState={currentState} trajectory={trajectory} />
+        </div>
         <aside className="sidebar">
           <StatePanel state={currentState} />
           <SensorStatus state={currentState} connected={connected} />

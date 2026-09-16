@@ -12,6 +12,7 @@ import math
 from collections.abc import Iterator
 
 from backend.models.state import (
+    ActivityState,
     EstimatedState,
     Quaternion,
     SensorStatus,
@@ -34,6 +35,15 @@ def _heading_to_quaternion(yaw_rad: float) -> Quaternion:
     return Quaternion(x=0.0, y=0.0, z=math.sin(half), w=math.cos(half))
 
 
+def _activity_for_index(index: int, dt_s: float) -> ActivityState:
+    t = index * dt_s
+    if t < 3.0:
+        return ActivityState(posture="standing", motion="walking", confidence=0.9)
+    if t < 6.0:
+        return ActivityState(posture="crouching", motion="walking", confidence=0.86)
+    return ActivityState(posture="standing", motion="stationary", confidence=0.92)
+
+
 def simulated_state_stream(sample_count: int = 90, dt_s: float = DEFAULT_DT_S) -> Iterator[EstimatedState]:
     for index in range(sample_count):
         x, y, vx, vy, yaw, stopped = path_pose(index=index, dt_s=dt_s)
@@ -54,6 +64,7 @@ def simulated_state_stream(sample_count: int = 90, dt_s: float = DEFAULT_DT_S) -
                 uwb_available=True,
                 active_anchor_count=3,
             ),
+            activity=_activity_for_index(index=index, dt_s=dt_s),
         )
 
 

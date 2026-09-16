@@ -11,5 +11,6 @@ def test_fake_state_reaches_api_serialization() -> None:
     assert message["type"] == "estimated_state"
     assert message["source"] == "simulation"
     assert message["state"]["status"]["active_anchor_count"] == 3
+    assert message["state"]["activity"]["posture"] == "standing"
+    assert message["state"]["activity"]["motion"] == "walking"
     assert message["state"]["position_m"]["x"] >= 1.0
-

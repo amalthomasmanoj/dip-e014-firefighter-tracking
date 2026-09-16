@@ -25,5 +25,10 @@
     "zupt_active": false,
     "uwb_available": true,
     "active_anchor_count": 3
+  },
+  "activity": {
+    "posture": "standing",
+    "motion": "walking",
+    "confidence": 0.9
   }
 }

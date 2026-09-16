@@ -26,6 +26,11 @@ export type EstimatedState = {
     uwb_available: boolean;
     active_anchor_count: number;
   };
+  activity: {
+    posture: "standing" | "crouching";
+    motion: "stationary" | "walking";
+    confidence: number;
+  };
 };
 
 export type StateMessage = {
@@ -40,4 +45,3 @@ export type Anchor = {
   y_m: number;
   z_m: number;
 };
-

@@ -62,8 +62,15 @@ body {
   max-width: 1180px;
 }
 
+.main-views {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
 .map-panel,
-.side-panel {
+.side-panel,
+.twin-panel {
   background: #ffffff;
   border: 1px solid #d8dee6;
   border-radius: 8px;
@@ -72,6 +79,55 @@ body {
 .map-panel {
   min-height: 520px;
   overflow: hidden;
+}
+
+.twin-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 380px;
+  overflow: hidden;
+}
+
+.twin-header {
+  align-items: center;
+  border-bottom: 1px solid #e2e8ef;
+  display: flex;
+  justify-content: space-between;
+  min-height: 52px;
+  padding: 12px 14px;
+}
+
+.twin-header h2 {
+  font-size: 16px;
+  margin: 0;
+}
+
+.twin-activity {
+  background: #eef6ff;
+  border: 1px solid #bcd7f4;
+  border-radius: 999px;
+  color: #174a7c;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 10px;
+  text-transform: uppercase;
+}
+
+.twin-canvas {
+  flex: 1;
+  min-height: 328px;
+}
+
+.twin-canvas canvas {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.twin-fallback-canvas {
+  display: block;
+  height: 100%;
+  width: 100%;
 }
 
 .map-svg {
@@ -194,5 +250,12 @@ dd {
   .map-svg {
     min-height: 430px;
   }
-}
 
+  .twin-panel {
+    min-height: 340px;
+  }
+
+  .twin-canvas {
+    min-height: 288px;
+  }
+}

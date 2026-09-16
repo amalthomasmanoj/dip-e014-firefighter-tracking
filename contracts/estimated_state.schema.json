@@ -9,7 +9,8 @@
     "velocity_mps",
     "orientation_xyzw",
     "uncertainty",
-    "status"
+    "status",
+    "activity"
   ],
   "properties": {
     "timestamp_us": { "type": "integer", "minimum": 0 },
@@ -45,6 +46,16 @@
         "active_anchor_count": { "type": "integer", "minimum": 0 }
       },
       "additionalProperties": false
+    },
+    "activity": {
+      "type": "object",
+      "required": ["posture", "motion", "confidence"],
+      "properties": {
+        "posture": { "type": "string", "enum": ["standing", "crouching"] },
+        "motion": { "type": "string", "enum": ["stationary", "walking"] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,
@@ -61,4 +72,3 @@
     }
   }
 }
-

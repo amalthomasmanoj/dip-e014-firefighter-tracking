@@ -22,8 +22,13 @@ export function StatePanel({ state }: Props) {
         <dd>{state ? state.position_m.z.toFixed(2) : "--"} m</dd>
         <dt>speed</dt>
         <dd>{state ? speed(state).toFixed(2) : "--"} m/s</dd>
+        <dt>posture</dt>
+        <dd>{state ? state.activity.posture : "--"}</dd>
+        <dt>motion</dt>
+        <dd>{state ? state.activity.motion : "--"}</dd>
+        <dt>activity confidence</dt>
+        <dd>{state ? `${Math.round(state.activity.confidence * 100)}%` : "--"}</dd>
       </dl>
     </section>
   );
 }
-

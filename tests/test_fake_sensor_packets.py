@@ -7,8 +7,10 @@ import jsonschema
 import pytest
 
 from tools.fake_data.sensor_packets import (
+    DEFAULT_ANCHORS,
     simulated_imu_packet_stream,
     simulated_mixed_packet_stream,
+    simulated_sensor_frame_packet_stream,
     simulated_uwb_range_packet_stream,
 )
 
@@ -89,3 +91,18 @@ def test_mixed_packets_validate_against_contract() -> None:
 
     assert_packets_validate(packets)
     assert {packet["type"] for packet in packets} == {"imu", "uwb_range"}
+
+
+def test_sensor_frame_stream_emits_imu_and_all_anchor_ranges_per_frame() -> None:
+    packets = list(simulated_sensor_frame_packet_stream(frame_count=2))
+
+    assert_packets_validate(packets)
+    assert len(packets) == 2 * (1 + len(DEFAULT_ANCHORS))
+    assert [packet["type"] for packet in packets[:4]] == [
+        "imu",
+        "uwb_range",
+        "uwb_range",
+        "uwb_range",
+    ]
+    assert [packet["data"]["anchor_id"] for packet in packets[1:4]] == ["A1", "A2", "A3"]
+    assert_monotonic_packet_metadata(packets)

@@ -60,6 +60,7 @@ def _imu_data(index: int, dt_s: float) -> dict[str, float]:
     _x, _y, vx, vy, _yaw, stopped = _path_pose(index=index, dt_s=dt_s)
     t = index * dt_s
     turning = 3.0 <= t < 3.5
+    crouching = 3.0 <= t < 6.0
 
     if stopped:
         ax_mps2 = 0.0
@@ -74,10 +75,15 @@ def _imu_data(index: int, dt_s: float) -> dict[str, float]:
         ay_mps2 = 0.02 if vy else 0.0
         gz_radps = 0.0
 
+    az_mps2 = 9.81
+    if crouching:
+        ax_mps2 += 7.0
+        az_mps2 = 7.0
+
     return {
         "ax_mps2": ax_mps2,
         "ay_mps2": ay_mps2,
-        "az_mps2": 9.81,
+        "az_mps2": az_mps2,
         "gx_radps": 0.0,
         "gy_radps": 0.0,
         "gz_radps": gz_radps,
@@ -206,3 +212,49 @@ def simulated_mixed_packet_stream(
                 start_sequence=start_sequence,
                 start_us=start_us,
             )
+
+
+def simulated_sensor_frame_packet_stream(
+    frame_count: int = 90,
+    dt_s: float = DEFAULT_DT_S,
+    node_id: str = DEFAULT_NODE_ID,
+    start_sequence: int = DEFAULT_START_SEQUENCE,
+    start_us: int = DEFAULT_START_US,
+    anchors: Sequence[Anchor] = DEFAULT_ANCHORS,
+) -> Iterator[SensorPacket]:
+    """Emit fake hardware-like frames: one IMU sample plus all anchor ranges."""
+    if not anchors:
+        raise ValueError("at least one anchor is required")
+
+    sequence_number = start_sequence
+    for index in range(frame_count):
+        frame_timestamp_us = timestamp_for_index(
+            index=index,
+            start_us=start_us,
+            dt_s=dt_s,
+        )
+        imu_packet = _imu_packet(
+            index=index,
+            dt_s=dt_s,
+            node_id=node_id,
+            start_sequence=sequence_number - index,
+            start_us=start_us,
+        )
+        imu_packet["sequence_number"] = sequence_number
+        imu_packet["timestamp_us"] = frame_timestamp_us
+        yield imu_packet
+        sequence_number += 1
+
+        for anchor_offset, anchor in enumerate(anchors, start=1):
+            uwb_packet = _uwb_range_packet(
+                index=index,
+                anchor=anchor,
+                dt_s=dt_s,
+                node_id=node_id,
+                start_sequence=sequence_number - index,
+                start_us=start_us,
+            )
+            uwb_packet["sequence_number"] = sequence_number
+            uwb_packet["timestamp_us"] = frame_timestamp_us + anchor_offset
+            yield uwb_packet
+            sequence_number += 1

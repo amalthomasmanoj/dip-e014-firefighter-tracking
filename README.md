@@ -41,15 +41,21 @@ The backend defaults to fake simulation data. Select a startup source with:
 E014_SOURCE=simulation uvicorn backend.api.app:app --reload
 ```
 
-Supported source modes are `simulation`, `udp`, and `replay`. `udp` and `replay`
-are accepted startup modes, but their production pipelines are placeholders until
-hardware ingestion and recorded replay are implemented.
+Supported source modes are `simulation`, `udp`, and `replay`. `simulation`
+generates generic fake IMU/UWB packets and estimates state through the backend
+pipeline. `udp` listens for generic sensor packets on UDP port `9000`, estimates
+state, and streams it to the UI as `live`. `replay` is accepted as a startup
+mode, but recorded replay is a placeholder until MCAP replay is implemented.
 
 WebSocket endpoint:
 
 ```text
 ws://localhost:8000/ws/state
 ```
+
+Live UDP mode expects devices or adapters to emit the generic packet contracts
+from `contracts/packet_schema.json`; no device-specific parsing belongs in the
+UI or fusion layer.
 
 ### Frontend
 

@@ -49,7 +49,7 @@ def test_serialize_state_message_maps_udp_to_contract_live_source() -> None:
     ("source_mode", "source_status"),
     [
         (SourceMode.SIMULATION, "available"),
-        (SourceMode.UDP, "not_implemented"),
+        (SourceMode.UDP, "available"),
         (SourceMode.REPLAY, "not_implemented"),
     ],
 )

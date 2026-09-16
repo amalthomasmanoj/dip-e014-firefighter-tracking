@@ -21,7 +21,7 @@ class SourceMode(str, Enum):
 
     @property
     def is_stream_available(self) -> bool:
-        return self is SourceMode.SIMULATION
+        return self in {SourceMode.SIMULATION, SourceMode.UDP}
 
 
 def parse_source_mode(value: str | None) -> SourceMode:

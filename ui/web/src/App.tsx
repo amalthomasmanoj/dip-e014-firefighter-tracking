@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchAnchors } from "./api/anchors";
 import { connectStateStream } from "./api/websocket";
 import { BuildingMap } from "./components/BuildingMap/BuildingMap";
@@ -6,6 +6,12 @@ import { DigitalTwinView } from "./components/DigitalTwinView";
 import { ExperimentPlot } from "./components/ExperimentPlot";
 import { SensorStatus } from "./components/SensorStatus";
 import { StatePanel } from "./components/StatePanel";
+import {
+  fallbackDemoState,
+  moveDemoState,
+  stopDemoState,
+  toggleDemoCrouch,
+} from "./demo/keyboardDemo";
 import { Anchor, EstimatedState } from "./types/state";
 
 const fallbackAnchors: Anchor[] = [
@@ -18,6 +24,9 @@ export default function App() {
   const [anchors, setAnchors] = useState<Anchor[]>(fallbackAnchors);
   const [connected, setConnected] = useState(false);
   const [trajectory, setTrajectory] = useState<EstimatedState[]>([]);
+  const [demoTrajectory, setDemoTrajectory] = useState<EstimatedState[]>([]);
+  const [source, setSource] = useState<"simulation" | "live" | "replay" | null>(null);
+  const stopTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     fetchAnchors()
@@ -27,12 +36,78 @@ export default function App() {
 
   useEffect(() => {
     const socket = connectStateStream((message) => {
-      setTrajectory((previous) => [...previous.slice(-180), message.state]);
+      setSource(message.source);
+      if (message.source === "live") {
+        setTrajectory((previous) => [...previous.slice(-180), message.state]);
+        return;
+      }
+
+      setDemoTrajectory((previous) => (previous.length ? previous : [message.state]));
     }, setConnected);
     return () => socket.close();
   }, []);
 
-  const currentState = useMemo(() => trajectory.at(-1) ?? null, [trajectory]);
+  useEffect(() => {
+    if (source === "live") {
+      return;
+    }
+
+    function updateDemoState(updater: (state: EstimatedState) => EstimatedState) {
+      setDemoTrajectory((previous) => {
+        const current = previous.at(-1) ?? fallbackDemoState();
+        const next = updater(current);
+        return [...previous.slice(-180), next];
+      });
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+
+      const movementByKey: Record<string, { dx: number; dy: number } | undefined> = {
+        ArrowUp: { dx: 0, dy: 1 },
+        ArrowDown: { dx: 0, dy: -1 },
+        ArrowLeft: { dx: -1, dy: 0 },
+        ArrowRight: { dx: 1, dy: 0 },
+      };
+      const movementByCode: Record<string, { dx: number; dy: number } | undefined> = {
+        Numpad8: { dx: 0, dy: 1 },
+        Numpad2: { dx: 0, dy: -1 },
+        Numpad4: { dx: -1, dy: 0 },
+        Numpad6: { dx: 1, dy: 0 },
+      };
+      const movement = movementByKey[event.key] ?? movementByCode[event.code];
+
+      if (movement) {
+        event.preventDefault();
+        updateDemoState((state) => moveDemoState(state, movement.dx, movement.dy));
+        if (stopTimerRef.current !== null) {
+          window.clearTimeout(stopTimerRef.current);
+        }
+        stopTimerRef.current = window.setTimeout(() => {
+          updateDemoState(stopDemoState);
+        }, 180);
+      }
+
+      if (event.key.toLowerCase() === "c") {
+        event.preventDefault();
+        updateDemoState(toggleDemoCrouch);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      if (stopTimerRef.current !== null) {
+        window.clearTimeout(stopTimerRef.current);
+        stopTimerRef.current = null;
+      }
+    };
+  }, [source]);
+
+  const activeTrajectory = source === "live" ? trajectory : demoTrajectory;
+  const currentState = useMemo(() => activeTrajectory.at(-1) ?? null, [activeTrajectory]);
 
   return (
     <main className="app-shell">
@@ -45,13 +120,13 @@ export default function App() {
       </header>
       <div className="workspace">
         <div className="main-views">
-          <DigitalTwinView anchors={anchors} state={currentState} trajectory={trajectory} />
-          <BuildingMap anchors={anchors} currentState={currentState} trajectory={trajectory} />
+          <DigitalTwinView anchors={anchors} state={currentState} trajectory={activeTrajectory} />
+          <BuildingMap anchors={anchors} currentState={currentState} trajectory={activeTrajectory} />
         </div>
         <aside className="sidebar">
           <StatePanel state={currentState} />
           <SensorStatus state={currentState} connected={connected} />
-          <ExperimentPlot trajectory={trajectory} />
+          <ExperimentPlot trajectory={activeTrajectory} />
         </aside>
       </div>
     </main>

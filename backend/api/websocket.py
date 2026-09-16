@@ -6,8 +6,7 @@ from collections.abc import AsyncIterator
 
 from backend.config.source import SourceMode
 from backend.fusion.demo_estimator import DemoSensorEstimator
-from backend.ingestion.pipeline import udp_measurement_events
-from backend.ingestion.pipeline import ingest_datagram
+from backend.ingestion.pipeline import ingest_datagram, udp_measurement_events
 from backend.ingestion.sequencing import SequenceTracker
 from backend.models.state import EstimatedState, websocket_message
 from tools.fake_data.sensor_packets import simulated_sensor_frame_packet_stream
@@ -15,7 +14,7 @@ from tools.fake_data.sensor_packets import simulated_sensor_frame_packet_stream
 
 async def fake_state_messages(interval_s: float = 0.1) -> AsyncIterator[str]:
     while True:
-        estimator = DemoSensorEstimator()
+        estimator = DemoSensorEstimator(emit_imu_only_state=False)
         tracker = SequenceTracker()
         for packet in simulated_sensor_frame_packet_stream():
             event = ingest_datagram(

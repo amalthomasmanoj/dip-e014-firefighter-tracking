@@ -362,10 +362,10 @@ export function DigitalTwinView({ anchors, state, trajectory }: Props) {
 
     let previousAnchorCount = -1;
     let animationFrame = 0;
-    const clock = new THREE.Clock();
+    const startedAtMs = performance.now();
 
     function animate() {
-      const elapsedS = clock.getElapsedTime();
+      const elapsedS = (performance.now() - startedAtMs) / 1000;
       if (previousAnchorCount !== anchorsRef.current.length) {
         syncAnchors();
         previousAnchorCount = anchorsRef.current.length;

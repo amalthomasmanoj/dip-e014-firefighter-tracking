@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchAnchors } from "./api/anchors";
+import {
+  backendSourceFromHealth,
+  fetchBackendHealth,
+  fetchLiveUwbRanges,
+} from "./api/backend";
 import { connectStateStream } from "./api/websocket";
 import { BuildingMap } from "./components/BuildingMap/BuildingMap";
 import { DigitalTwinView } from "./components/DigitalTwinView";
@@ -8,11 +13,18 @@ import { SensorStatus } from "./components/SensorStatus";
 import { StatePanel } from "./components/StatePanel";
 import {
   fallbackDemoState,
+  keyboardDemoEnabled,
   moveDemoState,
   stopDemoState,
   toggleDemoCrouch,
 } from "./demo/keyboardDemo";
-import { Anchor, EstimatedState } from "./types/state";
+import {
+  Anchor,
+  BackendSource,
+  EstimatedState,
+  LiveUwbSnapshot,
+  StateMessage,
+} from "./types/state";
 
 const fallbackAnchors: Anchor[] = [
   { anchor_id: "A1", x_m: 0, y_m: 0, z_m: 0 },
@@ -20,12 +32,22 @@ const fallbackAnchors: Anchor[] = [
   { anchor_id: "A3", x_m: 0, y_m: 6, z_m: 0 },
 ];
 
+const emptyLiveUwbSnapshot: LiveUwbSnapshot = {
+  source: "live",
+  tag_node_id: null,
+  tag_present: false,
+  latest_timestamp_us: null,
+  active_anchor_count: 0,
+  ranges: [],
+};
+
 export default function App() {
   const [anchors, setAnchors] = useState<Anchor[]>(fallbackAnchors);
   const [connected, setConnected] = useState(false);
   const [trajectory, setTrajectory] = useState<EstimatedState[]>([]);
   const [demoTrajectory, setDemoTrajectory] = useState<EstimatedState[]>([]);
-  const [source, setSource] = useState<"simulation" | "live" | "replay" | null>(null);
+  const [source, setSource] = useState<BackendSource | null>(null);
+  const [liveUwb, setLiveUwb] = useState<LiveUwbSnapshot>(emptyLiveUwbSnapshot);
   const stopTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -35,20 +57,86 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const socket = connectStateStream((message) => {
+    let cancelled = false;
+    const refresh = () => {
+      fetchBackendHealth()
+        .then((health) => {
+          if (!cancelled) {
+            setSource(backendSourceFromHealth(health));
+          }
+        })
+        .catch(() => undefined);
+    };
+    refresh();
+    const interval = window.setInterval(refresh, 1_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  useEffect(() => {
+    let disposed = false;
+    let retryTimer: number | null = null;
+    let socket: WebSocket | null = null;
+
+    const handleMessage = (message: StateMessage) => {
       setSource(message.source);
       if (message.source === "live") {
         setTrajectory((previous) => [...previous.slice(-180), message.state]);
         return;
       }
-
       setDemoTrajectory((previous) => (previous.length ? previous : [message.state]));
-    }, setConnected);
-    return () => socket.close();
+    };
+
+    const openSocket = () => {
+      socket = connectStateStream(handleMessage, (isConnected) => {
+        setConnected(isConnected);
+        if (!isConnected && !disposed && retryTimer === null) {
+          retryTimer = window.setTimeout(() => {
+            retryTimer = null;
+            openSocket();
+          }, 1_000);
+        }
+      });
+    };
+
+    openSocket();
+    return () => {
+      disposed = true;
+      if (retryTimer !== null) {
+        window.clearTimeout(retryTimer);
+      }
+      socket?.close();
+    };
   }, []);
 
   useEffect(() => {
-    if (source === "live") {
+    if (source !== "live") {
+      setLiveUwb(emptyLiveUwbSnapshot);
+      return;
+    }
+
+    let cancelled = false;
+    const refresh = () => {
+      fetchLiveUwbRanges()
+        .then((snapshot) => {
+          if (!cancelled) {
+            setLiveUwb(snapshot);
+          }
+        })
+        .catch(() => undefined);
+    };
+    refresh();
+    const interval = window.setInterval(refresh, 250);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [source]);
+
+  useEffect(() => {
+    if (!keyboardDemoEnabled(source)) {
       return;
     }
 
@@ -108,6 +196,15 @@ export default function App() {
 
   const activeTrajectory = source === "live" ? trajectory : demoTrajectory;
   const currentState = useMemo(() => activeTrajectory.at(-1) ?? null, [activeTrajectory]);
+  const visualizedState =
+    source === "live" && liveUwb.active_anchor_count < 3 ? null : currentState;
+  const visibleAnchors = useMemo(() => {
+    if (source !== "live") {
+      return anchors;
+    }
+    const activeIds = new Set(liveUwb.ranges.map((range) => range.anchor_id));
+    return anchors.filter((anchor) => activeIds.has(anchor.anchor_id));
+  }, [anchors, liveUwb.ranges, source]);
 
   return (
     <main className="app-shell">
@@ -120,12 +217,27 @@ export default function App() {
       </header>
       <div className="workspace">
         <div className="main-views">
-          <DigitalTwinView anchors={anchors} state={currentState} trajectory={activeTrajectory} />
-          <BuildingMap anchors={anchors} currentState={currentState} trajectory={activeTrajectory} />
+          <DigitalTwinView
+            anchors={visibleAnchors}
+            state={visualizedState}
+            trajectory={activeTrajectory}
+            liveUwb={source === "live" ? liveUwb : null}
+          />
+          <BuildingMap
+            anchors={visibleAnchors}
+            currentState={visualizedState}
+            trajectory={activeTrajectory}
+            liveUwb={source === "live" ? liveUwb : null}
+          />
         </div>
         <aside className="sidebar">
-          <StatePanel state={currentState} />
-          <SensorStatus state={currentState} connected={connected} />
+          <StatePanel state={visualizedState} />
+          <SensorStatus
+            state={visualizedState}
+            connected={connected}
+            source={source}
+            liveUwb={source === "live" ? liveUwb : null}
+          />
           <ExperimentPlot trajectory={activeTrajectory} />
         </aside>
       </div>

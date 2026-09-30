@@ -39,6 +39,30 @@ export type StateMessage = {
   state: EstimatedState;
 };
 
+export type BackendSource = "simulation" | "live" | "replay";
+
+export type BackendHealth = {
+  status: string;
+  source: "simulation" | "udp" | "replay";
+  source_status: string;
+};
+
+export type UwbRangeReading = {
+  anchor_id: string;
+  range_m: number;
+  measurement_timestamp_us: number;
+  age_s: number;
+};
+
+export type LiveUwbSnapshot = {
+  source: "live";
+  tag_node_id: string | null;
+  tag_present: boolean;
+  latest_timestamp_us: number | null;
+  active_anchor_count: number;
+  ranges: UwbRangeReading[];
+};
+
 export type Anchor = {
   anchor_id: string;
   x_m: number;

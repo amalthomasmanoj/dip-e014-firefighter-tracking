@@ -1,11 +1,17 @@
 import { useEffect, useRef, type MutableRefObject } from "react";
 import * as THREE from "three";
-import { Anchor, EstimatedState } from "../types/state";
+import {
+  Anchor,
+  EstimatedState,
+  LiveUwbSnapshot,
+  UwbRangeReading,
+} from "../types/state";
 
 type Props = {
   anchors: Anchor[];
   state: EstimatedState | null;
   trajectory: EstimatedState[];
+  liveUwb: LiveUwbSnapshot | null;
 };
 
 type AvatarParts = {
@@ -57,6 +63,45 @@ function createAvatar(): AvatarParts {
 
   root.add(torso, chestStripe, head, leftLeg, rightLeg, leftArm, rightArm, beacon);
   return { root, torso, head, leftLeg, rightLeg, leftArm, rightArm, beacon };
+}
+
+function createTextSprite(text: string): THREE.Sprite {
+  const canvas = document.createElement("canvas");
+  canvas.width = 320;
+  canvas.height = 72;
+  const context = canvas.getContext("2d");
+  if (context) {
+    context.fillStyle = "rgba(255, 255, 255, 0.9)";
+    context.roundRect(2, 2, 316, 68, 14);
+    context.fill();
+    context.fillStyle = "#3974a8";
+    context.font = "700 30px system-ui";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(text, 160, 37);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: texture, depthTest: false, transparent: true }),
+  );
+  sprite.scale.set(1.25, 0.28, 1);
+  return sprite;
+}
+
+function clearVisualGroup(group: THREE.Group): void {
+  for (const child of [...group.children]) {
+    child.traverse((object) => {
+      const visual = object as THREE.Mesh;
+      visual.geometry?.dispose();
+      const materials = Array.isArray(visual.material) ? visual.material : [visual.material];
+      materials.filter(Boolean).forEach((material) => {
+        const spriteMaterial = material as THREE.SpriteMaterial;
+        spriteMaterial.map?.dispose();
+        material.dispose();
+      });
+    });
+    group.remove(child);
+  }
 }
 
 function updateAvatar(parts: AvatarParts, state: EstimatedState | null, elapsedS: number): void {
@@ -112,6 +157,7 @@ function runCanvasFallback(
   stateRef: MutableRefObject<EstimatedState | null>,
   trajectoryRef: MutableRefObject<EstimatedState[]>,
   anchorsRef: MutableRefObject<Anchor[]>,
+  rangesRef: MutableRefObject<UwbRangeReading[]>,
 ): () => void {
   const canvas = document.createElement("canvas");
   const canvasContext = canvas.getContext("2d");
@@ -241,9 +287,43 @@ function runCanvasFallback(
       context.beginPath();
       context.arc(top.x, top.y, 7, 0, Math.PI * 2);
       context.fill();
+      context.fillStyle = "#1f6feb";
+      context.font = "700 12px system-ui";
+      context.fillText(anchor.anchor_id, top.x + 10, top.y - 8);
     });
 
     const state = stateRef.current;
+    context.save();
+    context.strokeStyle = "#72a7d8";
+    context.fillStyle = "#3974a8";
+    context.font = "700 12px system-ui";
+    context.setLineDash([3, 7]);
+    rangesRef.current.forEach((range) => {
+      const anchor = anchorsRef.current.find((item) => item.anchor_id === range.anchor_id);
+      if (!anchor) {
+        return;
+      }
+      const anchorPoint = project(anchor.x_m, anchor.y_m, 0.7);
+      if (state) {
+        const tagPoint = project(state.position_m.x, state.position_m.y, 0.85);
+        context.beginPath();
+        context.moveTo(tagPoint.x, tagPoint.y);
+        context.lineTo(anchorPoint.x, anchorPoint.y);
+        context.stroke();
+        context.fillText(
+          `${range.range_m.toFixed(2)} m`,
+          (tagPoint.x + anchorPoint.x) / 2 + 6,
+          (tagPoint.y + anchorPoint.y) / 2 - 6,
+        );
+      } else {
+        context.beginPath();
+        context.arc(anchorPoint.x, anchorPoint.y, Math.max(14, range.range_m * 28), 0, Math.PI * 2);
+        context.stroke();
+        context.fillText(`${range.range_m.toFixed(2)} m`, anchorPoint.x + 12, anchorPoint.y + 22);
+      }
+    });
+    context.restore();
+
     if (state) {
       drawAvatar(state, elapsedS);
     }
@@ -268,17 +348,19 @@ function runCanvasFallback(
   };
 }
 
-export function DigitalTwinView({ anchors, state, trajectory }: Props) {
+export function DigitalTwinView({ anchors, state, trajectory, liveUwb }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stateRef = useRef(state);
   const trajectoryRef = useRef(trajectory);
   const anchorsRef = useRef(anchors);
+  const rangesRef = useRef(liveUwb?.ranges ?? []);
 
   useEffect(() => {
     stateRef.current = state;
     trajectoryRef.current = trajectory;
     anchorsRef.current = anchors;
-  }, [anchors, state, trajectory]);
+    rangesRef.current = liveUwb?.ranges ?? [];
+  }, [anchors, liveUwb?.ranges, state, trajectory]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -298,7 +380,13 @@ export function DigitalTwinView({ anchors, state, trajectory }: Props) {
     try {
       renderer = new THREE.WebGLRenderer({ antialias: true });
     } catch {
-      return runCanvasFallback(activeContainer, stateRef, trajectoryRef, anchorsRef);
+      return runCanvasFallback(
+        activeContainer,
+        stateRef,
+        trajectoryRef,
+        anchorsRef,
+        rangesRef,
+      );
     }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
@@ -326,6 +414,9 @@ export function DigitalTwinView({ anchors, state, trajectory }: Props) {
     const anchorGroup = new THREE.Group();
     scene.add(anchorGroup);
 
+    const rangeGroup = new THREE.Group();
+    scene.add(rangeGroup);
+
     const trajectoryLine = new THREE.Line(
       new THREE.BufferGeometry(),
       new THREE.LineBasicMaterial({ color: 0xf08c2e, linewidth: 3 }),
@@ -343,7 +434,7 @@ export function DigitalTwinView({ anchors, state, trajectory }: Props) {
     }
 
     function syncAnchors() {
-      anchorGroup.clear();
+      clearVisualGroup(anchorGroup);
       const postMaterial = new THREE.MeshStandardMaterial({ color: 0x1f6feb, roughness: 0.45 });
       const labelMaterial = new THREE.MeshStandardMaterial({ color: 0x1f6feb, roughness: 0.45 });
       anchorsRef.current.forEach((anchor) => {
@@ -351,7 +442,67 @@ export function DigitalTwinView({ anchors, state, trajectory }: Props) {
         post.position.set(anchor.x_m, 0.35, -anchor.y_m);
         const top = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 12), labelMaterial);
         top.position.set(anchor.x_m, 0.76, -anchor.y_m);
-        anchorGroup.add(post, top);
+        const label = createTextSprite(anchor.anchor_id);
+        label.position.set(anchor.x_m + 0.34, 1.03, -anchor.y_m);
+        label.scale.set(0.55, 0.14, 1);
+        anchorGroup.add(post, top, label);
+      });
+    }
+
+    function syncRangeLinks() {
+      clearVisualGroup(rangeGroup);
+      const state = stateRef.current;
+      const anchorsById = new Map(
+        anchorsRef.current.map((anchor) => [anchor.anchor_id, anchor]),
+      );
+      rangesRef.current.forEach((range) => {
+        const anchor = anchorsById.get(range.anchor_id);
+        if (!anchor) {
+          return;
+        }
+        const material = new THREE.LineDashedMaterial({
+          color: 0x72a7d8,
+          dashSize: 0.08,
+          gapSize: 0.12,
+          opacity: 0.72,
+          transparent: true,
+        });
+
+        if (state) {
+          const tagPoint = new THREE.Vector3(
+            state.position_m.x,
+            0.88,
+            -state.position_m.y,
+          );
+          const anchorPoint = new THREE.Vector3(anchor.x_m, 0.76, -anchor.y_m);
+          const line = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints([tagPoint, anchorPoint]),
+            material,
+          );
+          line.computeLineDistances();
+          const label = createTextSprite(`${range.range_m.toFixed(2)} m`);
+          label.position.copy(tagPoint).add(anchorPoint).multiplyScalar(0.5);
+          label.position.y += 0.18;
+          rangeGroup.add(line, label);
+          return;
+        }
+
+        const circlePoints = Array.from({ length: 97 }, (_value, index) => {
+          const angle = (index / 96) * Math.PI * 2;
+          return new THREE.Vector3(
+            anchor.x_m + Math.cos(angle) * range.range_m,
+            0.035,
+            -anchor.y_m - Math.sin(angle) * range.range_m,
+          );
+        });
+        const circle = new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints(circlePoints),
+          material,
+        );
+        circle.computeLineDistances();
+        const label = createTextSprite(`${range.range_m.toFixed(2)} m`);
+        label.position.set(anchor.x_m + 0.45, 1.18, -anchor.y_m);
+        rangeGroup.add(circle, label);
       });
     }
 
@@ -359,16 +510,25 @@ export function DigitalTwinView({ anchors, state, trajectory }: Props) {
     resizeObserver.observe(activeContainer);
     resize();
     syncAnchors();
+    syncRangeLinks();
 
-    let previousAnchorCount = -1;
+    let previousVisualSignature = "";
     let animationFrame = 0;
     const startedAtMs = performance.now();
 
     function animate() {
       const elapsedS = (performance.now() - startedAtMs) / 1000;
-      if (previousAnchorCount !== anchorsRef.current.length) {
+      const visualSignature = JSON.stringify({
+        anchors: anchorsRef.current.map((anchor) => anchor.anchor_id),
+        ranges: rangesRef.current.map((range) => [range.anchor_id, range.range_m]),
+        state: stateRef.current
+          ? [stateRef.current.position_m.x, stateRef.current.position_m.y]
+          : null,
+      });
+      if (previousVisualSignature !== visualSignature) {
         syncAnchors();
-        previousAnchorCount = anchorsRef.current.length;
+        syncRangeLinks();
+        previousVisualSignature = visualSignature;
       }
       updateAvatar(avatar, stateRef.current, elapsedS);
       updateTrajectory(trajectoryLine, trajectoryRef.current);
@@ -383,6 +543,8 @@ export function DigitalTwinView({ anchors, state, trajectory }: Props) {
       resizeObserver.disconnect();
       renderer.dispose();
       trajectoryLine.geometry.dispose();
+      clearVisualGroup(anchorGroup);
+      clearVisualGroup(rangeGroup);
       activeContainer.removeChild(renderer.domElement);
     };
   }, []);
@@ -392,9 +554,22 @@ export function DigitalTwinView({ anchors, state, trajectory }: Props) {
       <div className="twin-header">
         <h2>Digital Twin</h2>
         <span className="twin-activity">
-          {state ? `${state.activity.posture} ${state.activity.motion}` : "waiting for state"}
+          {state
+            ? `${state.activity.posture} ${state.activity.motion}`
+            : liveUwb?.tag_present
+              ? `tag detected · ${liveUwb.active_anchor_count}/3 anchors`
+              : "waiting for tag"}
         </span>
       </div>
+      {liveUwb?.ranges.length ? (
+        <div className="twin-range-strip">
+          {liveUwb.ranges.map((range) => (
+            <span key={range.anchor_id}>
+              {range.anchor_id} <strong>{range.range_m.toFixed(2)} m</strong>
+            </span>
+          ))}
+        </div>
+      ) : null}
       <div className="twin-canvas" ref={containerRef} />
     </section>
   );

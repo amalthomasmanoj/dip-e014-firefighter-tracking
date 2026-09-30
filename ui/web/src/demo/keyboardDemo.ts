@@ -1,7 +1,11 @@
-import { EstimatedState } from "../types/state";
+import { BackendSource, EstimatedState } from "../types/state";
 
 const STEP_M = 0.2;
 const WALK_SPEED_MPS = 0.8;
+
+export function keyboardDemoEnabled(source: BackendSource | null): boolean {
+  return source === "simulation";
+}
 
 export function fallbackDemoState(): EstimatedState {
   return {

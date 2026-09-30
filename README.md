@@ -59,6 +59,26 @@ Live UDP mode expects devices or adapters to emit the generic packet contracts
 from `contracts/packet_schema.json`; no device-specific parsing belongs in the
 UI or fusion layer.
 
+The current ESP32 + DWM3000 tag firmware broadcasts one multi-anchor sweep on
+UDP port `7007`. Run the hardware-edge adapter alongside the live backend to
+convert those centimetre-based sweeps into generic per-anchor packets on port
+`9000`:
+
+```bash
+python3 -m tools.uwb.dwm3000_udp_adapter
+```
+
+See [tools/uwb/README.md](tools/uwb/README.md) for packet details and optional
+raw sweep capture. The adapter does not change the shared packet contract.
+
+In live mode the UI disables keyboard demo controls immediately, independently
+of whether the estimator has produced a position. It shows only anchors with a
+fresh real range. With fewer than three anchors it renders labelled range
+circles and marks the tag position as unresolved; with a solvable position it
+renders the firefighter and thin dotted, labelled tag-to-anchor range lines.
+The backend exposes the current fresh-range view at `GET /uwb/ranges` without
+adding hardware-specific fields to the shared measurement contract.
+
 ### Frontend
 
 ```bash

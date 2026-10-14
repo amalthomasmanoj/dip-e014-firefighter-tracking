@@ -9,6 +9,7 @@ from backend.fusion.demo_estimator import DemoSensorEstimator
 from backend.ingestion.events import IngestedMeasurement
 from backend.ingestion.pipeline import udp_measurement_events
 from backend.models.state import websocket_message
+from backend.uwb.anchor_map import LiveAnchorMapTracker
 from backend.uwb.anchors import DEFAULT_ANCHORS, Anchor
 from backend.uwb.live_ranges import LiveUwbRangeTracker
 
@@ -20,14 +21,21 @@ class LiveUdpStateHub:
         self,
         range_tracker: LiveUwbRangeTracker,
         anchors: tuple[Anchor, ...] = DEFAULT_ANCHORS,
+        anchor_map_tracker: LiveAnchorMapTracker | None = None,
     ) -> None:
         self._range_tracker = range_tracker
+        self._anchor_map_tracker = anchor_map_tracker
         self._estimator = DemoSensorEstimator(anchors=anchors)
         self._subscribers: set[asyncio.Queue[str]] = set()
         self._task: asyncio.Task[None] | None = None
 
     def process(self, event: IngestedMeasurement) -> str | None:
         self._range_tracker.observe(event)
+        if self._anchor_map_tracker is not None and self._anchor_map_tracker.observe(event):
+            self._estimator.set_anchors(
+                self._anchor_map_tracker.anchors,
+                reset_position=True,
+            )
         state = self._estimator.update(event.measurement)
         if state is None:
             return None

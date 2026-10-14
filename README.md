@@ -76,7 +76,8 @@ python3 -m tools.uwb.dwm3000_udp_adapter
 ```
 
 See [tools/uwb/README.md](tools/uwb/README.md) for packet details and optional
-raw sweep capture. The adapter does not change the shared packet contract.
+raw sweep capture. The adapter is the hardware-edge producer for generic
+`uwb_range` and `uwb_pair_range` contract packets.
 
 The estimator can use any three or more configured, non-collinear anchors; the
 IDs do not have to be `A1`, `A2`, and `A3`. For real hardware, copy
@@ -94,6 +95,14 @@ For example, if the responding devices are `A1`, `A2`, and `A4`, the YAML must
 contain those three IDs and their measured coordinates. The backend exposes the
 active configuration at `GET /anchors`. One or two ranges identify circles, not
 a unique 2-D tag position, so the UI shows them as detected but unresolved.
+
+The anchor-v2 radio protocol can survey `A1-A2`, `A1-A3`, and `A2-A3`. Once the
+tag continuously commands those stage-5 exchanges and forwards the stage-6
+results described in [tools/uwb/README.md](tools/uwb/README.md), the backend
+builds a relative anchor map and updates `GET /anchors` when sustained physical
+movement is detected. `GET /uwb/anchor-map` exposes map version, freshness,
+accepted/raw/filtered pair ranges, and RF diagnostics. Flashing anchor v2 alone
+is insufficient because the current laptop link is the tag's UDP broadcast.
 
 In live mode the UI disables keyboard demo controls immediately, independently
 of whether the estimator has produced a position. It keeps all configured

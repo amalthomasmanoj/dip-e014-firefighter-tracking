@@ -5,7 +5,7 @@ import json
 import pytest
 
 from backend.ingestion.parser import parse_packet
-from backend.models.measurements import UwbRangeMeasurement
+from backend.models.measurements import UwbPairRangeMeasurement, UwbRangeMeasurement
 from tools.uwb.dwm3000_udp_adapter import (
     generic_packets_from_sweep,
     parse_dwm3000_sweep,
@@ -58,11 +58,66 @@ def test_partial_anchor_sweep_is_valid() -> None:
     assert packets[0]["data"]["anchor_id"] == "A2"
 
 
+def test_stage_six_survey_result_converts_to_pair_measurement() -> None:
+    sample = {
+        "t": 512_900,
+        "tag_id": 10,
+        "anchors": {},
+        "surveys": [
+            {
+                "initiator_id": 1,
+                "target_id": 2,
+                "ok": True,
+                "distance_mm": 1967,
+                "rssi_gap_db": 5,
+                "rssi_dbm": -78,
+            }
+        ],
+    }
+
+    sweep = parse_dwm3000_sweep(sample)
+    packets = generic_packets_from_sweep(sweep, start_sequence_number=50)
+    measurement = parse_packet(packets[0])
+
+    assert isinstance(measurement, UwbPairRangeMeasurement)
+    assert measurement.node_id == "A1"
+    assert measurement.peer_id == "A2"
+    assert measurement.range_m == pytest.approx(1.967)
+    assert measurement.rssi_gap_db == pytest.approx(5.0)
+    assert measurement.rssi_dbm == pytest.approx(-78.0)
+
+
+def test_sweep_can_carry_tag_ranges_and_survey_results_together() -> None:
+    sample = json.loads(json.dumps(LIVE_FORMAT_SAMPLE))
+    sample["surveys"] = [
+        {
+            "initiator_id": 2,
+            "target_id": 3,
+            "ok": False,
+            "distance_mm": 0,
+            "rssi_gap_db": None,
+            "rssi_dbm": None,
+        }
+    ]
+
+    packets = generic_packets_from_sweep(
+        parse_dwm3000_sweep(sample),
+        start_sequence_number=60,
+    )
+
+    assert [packet["type"] for packet in packets] == [
+        "uwb_range",
+        "uwb_range",
+        "uwb_pair_range",
+    ]
+    assert packets[-1]["data"]["valid"] is False
+
+
 @pytest.mark.parametrize(
     ("mutation", "match"),
     [
         (lambda sample: sample.update(t=-1), "non-negative integer"),
-        (lambda sample: sample.update(anchors={}), "non-empty object"),
+        (lambda sample: sample.update(anchors={}), "anchor range or survey result"),
         (
             lambda sample: sample.update(
                 anchors={"anchor-one": LIVE_FORMAT_SAMPLE["anchors"]["A1"]}

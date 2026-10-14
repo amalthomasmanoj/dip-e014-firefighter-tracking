@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchAnchors } from "./api/anchors";
 import {
   backendSourceFromHealth,
   fetchBackendHealth,
+  fetchLiveAnchorMap,
   fetchLiveUwbRanges,
 } from "./api/backend";
 import { connectStateStream } from "./api/websocket";
@@ -18,6 +19,7 @@ import {
   BackendSource,
   EstimatedState,
   LiveUwbSnapshot,
+  LiveAnchorMapSnapshot,
   StateMessage,
 } from "./types/state";
 
@@ -36,6 +38,17 @@ const emptyLiveUwbSnapshot: LiveUwbSnapshot = {
   ranges: [],
 };
 
+const emptyLiveAnchorMap: LiveAnchorMapSnapshot = {
+  source: "live",
+  status: "surveying",
+  map_version: 0,
+  frame: "A1_origin_A2_positive_x",
+  reference_anchor_ids: ["A1", "A2", "A3"],
+  anchors: fallbackAnchors,
+  links: [],
+  last_error: null,
+};
+
 export default function App() {
   const [anchors, setAnchors] = useState<Anchor[]>(fallbackAnchors);
   const [connected, setConnected] = useState(false);
@@ -46,6 +59,8 @@ export default function App() {
   const [selectedTag, setSelectedTag] = useState("sim_tag_10");
   const [source, setSource] = useState<BackendSource | null>(null);
   const [liveUwb, setLiveUwb] = useState<LiveUwbSnapshot>(emptyLiveUwbSnapshot);
+  const [liveAnchorMap, setLiveAnchorMap] = useState<LiveAnchorMapSnapshot>(emptyLiveAnchorMap);
+  const liveMapVersionRef = useRef(0);
 
   useEffect(() => {
     fetchAnchors()
@@ -116,6 +131,7 @@ export default function App() {
   useEffect(() => {
     if (source !== "live") {
       setLiveUwb(emptyLiveUwbSnapshot);
+      setLiveAnchorMap(emptyLiveAnchorMap);
       return;
     }
 
@@ -125,6 +141,18 @@ export default function App() {
         .then((snapshot) => {
           if (!cancelled) {
             setLiveUwb(snapshot);
+          }
+        })
+        .catch(() => undefined);
+      fetchLiveAnchorMap()
+        .then((snapshot) => {
+          if (!cancelled) {
+            if (snapshot.map_version !== liveMapVersionRef.current) {
+              setTrajectory([]);
+              liveMapVersionRef.current = snapshot.map_version;
+            }
+            setLiveAnchorMap(snapshot);
+            setAnchors(snapshot.anchors);
           }
         })
         .catch(() => undefined);
@@ -174,6 +202,10 @@ export default function App() {
     const configuredIds = new Set(anchors.map((anchor) => anchor.anchor_id));
     return liveUwb.ranges.filter((range) => configuredIds.has(range.anchor_id)).length;
   }, [anchors, liveUwb.ranges]);
+  const liveAnchorLinks = useMemo(
+    () => liveAnchorMap.links.filter((link) => link.accepted && link.age_s <= 5),
+    [liveAnchorMap.links],
+  );
   const visualizedState =
     source === "live" &&
     (usableLiveAnchorCount < 3 ||
@@ -199,7 +231,11 @@ export default function App() {
             liveUwb={source === "live" ? liveUwb : null}
             usableAnchorCount={usableLiveAnchorCount}
             firefighters={activeTracks}
-            anchorLinks={source === "simulation" && simulationOnline ? simulation?.anchor_links : undefined}
+            anchorLinks={source === "simulation" && simulationOnline
+              ? simulation?.anchor_links
+              : source === "live"
+                ? liveAnchorLinks
+                : undefined}
           />
           <BuildingMap
             anchors={activeAnchors}
@@ -208,7 +244,11 @@ export default function App() {
             liveUwb={source === "live" ? liveUwb : null}
             usableAnchorCount={usableLiveAnchorCount}
             firefighters={activeTracks}
-            anchorLinks={source === "simulation" && simulationOnline ? simulation?.anchor_links : undefined}
+            anchorLinks={source === "simulation" && simulationOnline
+              ? simulation?.anchor_links
+              : source === "live"
+                ? liveAnchorLinks
+                : undefined}
           />
         </div>
         <aside className="sidebar">
@@ -229,6 +269,7 @@ export default function App() {
             liveUwb={source === "live" ? liveUwb : null}
             anchors={activeAnchors}
             usableAnchorCount={usableLiveAnchorCount}
+            liveAnchorMap={source === "live" ? liveAnchorMap : null}
           />
           <ExperimentPlot trajectory={activeTrajectory} />
         </aside>

@@ -9,15 +9,20 @@ from backend.fusion.demo_estimator import DemoSensorEstimator
 from backend.ingestion.events import IngestedMeasurement
 from backend.ingestion.pipeline import udp_measurement_events
 from backend.models.state import websocket_message
+from backend.uwb.anchors import DEFAULT_ANCHORS, Anchor
 from backend.uwb.live_ranges import LiveUwbRangeTracker
 
 
 class LiveUdpStateHub:
     """Own the single UDP receiver and fan live estimator states out to clients."""
 
-    def __init__(self, range_tracker: LiveUwbRangeTracker) -> None:
+    def __init__(
+        self,
+        range_tracker: LiveUwbRangeTracker,
+        anchors: tuple[Anchor, ...] = DEFAULT_ANCHORS,
+    ) -> None:
         self._range_tracker = range_tracker
-        self._estimator = DemoSensorEstimator()
+        self._estimator = DemoSensorEstimator(anchors=anchors)
         self._subscribers: set[asyncio.Queue[str]] = set()
         self._task: asyncio.Task[None] | None = None
 

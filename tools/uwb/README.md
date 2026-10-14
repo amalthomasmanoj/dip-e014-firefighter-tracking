@@ -45,3 +45,8 @@ At least three responding anchors with measured coordinates are needed for
 the current demo estimator to produce a 2-D position. Receiving one or two
 anchors still proves the real range ingestion path but is insufficient for
 trilateration.
+
+Anchor IDs are not fixed to `A1`/`A2`/`A3`. Put every installed anchor and its
+measured coordinates in a YAML file, then set `E014_ANCHORS_CONFIG` when
+starting the backend. For example, a responding `A4` is usable only when `A4`
+has a coordinate entry. See the repository README for the launch command.

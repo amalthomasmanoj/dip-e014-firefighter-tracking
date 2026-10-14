@@ -26,10 +26,10 @@ ID in byte 4. Stage 6 returns the target, success, uint16 millimetres, RSSI gap,
 and negated RSSI to the commanding tag. The backend and DWM3000 adapter now
 consume these results as `uwb_pair_range` measurements.
 
-The remaining firmware dependency is the tag. It must issue stage-5 commands,
-decode stage-6 results, and forward them in the documented adapter JSON. The
-previous tag output contains only `anchors`, so flashing the anchor-v2 sketch
-alone cannot update the laptop map.
+The supplied tag-v3 source now issues stage-5 commands, decodes stage-6 results,
+and forwards them in the documented adapter JSON. Both updated sketches must be
+flashed; the previous live capture contained only `anchors`, which proves the
+older tag firmware was still running during that test.
 
 ## What Is Still Needed From The Hardware/Firmware Owner
 
@@ -298,7 +298,7 @@ perform anchor localization or tag trilateration.
 
 ## Immediate Hardware Step
 
-Designate one tag to continuously schedule the three stage-5 pair
-commands and forward every stage-6 result using the JSON in
-`tools/uwb/README.md`. Then capture stationary and moved-anchor datasets to
+Flash the corrected anchor-v2 and tag-v3 sketches, using unique anchor and tag
+IDs, then confirm the tag forwards all three stage-5 pair results using the JSON
+in `tools/uwb/README.md`. Capture stationary and moved-anchor datasets to
 validate timing, RF accuracy, the 0.25 m movement threshold, and recovery.

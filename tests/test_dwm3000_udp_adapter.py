@@ -113,6 +113,34 @@ def test_sweep_can_carry_tag_ranges_and_survey_results_together() -> None:
     assert packets[-1]["data"]["valid"] is False
 
 
+def test_tag_v3_peer_and_legacy_inter_fields_do_not_block_survey_ingestion() -> None:
+    sample = json.loads(json.dumps(LIVE_FORMAT_SAMPLE))
+    sample.update(
+        peer={
+            "T11": {"distance": 350.0, "rssi": -70.0, "fp_rssi": -73.0}
+        },
+        surveys=[
+            {
+                "initiator_id": 1,
+                "target_id": 3,
+                "ok": True,
+                "distance_mm": 2450,
+                "rssi_gap_db": 4,
+                "rssi_dbm": -76,
+            }
+        ],
+        inter={"A1-A3": {"distance": 245.0, "gap": 4}},
+    )
+
+    packets = generic_packets_from_sweep(parse_dwm3000_sweep(sample), 0)
+    pair_measurement = parse_packet(packets[-1])
+
+    assert isinstance(pair_measurement, UwbPairRangeMeasurement)
+    assert pair_measurement.node_id == "A1"
+    assert pair_measurement.peer_id == "A3"
+    assert pair_measurement.range_m == pytest.approx(2.45)
+
+
 @pytest.mark.parametrize(
     ("mutation", "match"),
     [

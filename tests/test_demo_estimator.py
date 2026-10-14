@@ -136,3 +136,55 @@ def test_estimator_waits_for_a_synchronized_range_sweep() -> None:
     )
 
     assert mixed_sweep_state is None
+
+
+def test_stationary_imu_window_applies_zupt_to_uwb_velocity() -> None:
+    anchors = (
+        Anchor("A1", 0.0, 0.0),
+        Anchor("A2", 4.0, 0.0),
+        Anchor("A3", 0.0, 3.0),
+    )
+    estimator = DemoSensorEstimator(anchors=anchors)
+    state = None
+    sequence_number = 0
+
+    for sweep in range(12):
+        timestamp_us = sweep * 100_000
+        tag = (0.5 + sweep * 0.08, 1.0)
+        for anchor in anchors:
+            sequence_number += 1
+            state = estimator.update(
+                UwbRangeMeasurement(
+                    timestamp_us=timestamp_us,
+                    node_id="tag_1",
+                    sequence_number=sequence_number,
+                    anchor_id=anchor.anchor_id,
+                    range_m=distance_2d(anchor, tag),
+                    valid=True,
+                    quality=None,
+                )
+            )
+
+    assert state is not None
+    assert state.velocity_mps.x > 0.2
+
+    for offset in range(5):
+        sequence_number += 1
+        state = estimator.update(
+            ImuMeasurement(
+                timestamp_us=1_200_000 + offset * 20_000,
+                node_id="tag_1",
+                sequence_number=sequence_number,
+                ax_mps2=0.0,
+                ay_mps2=0.0,
+                az_mps2=9.80665,
+                gx_radps=0.0,
+                gy_radps=0.0,
+                gz_radps=0.0,
+            )
+        )
+
+    assert state is not None
+    assert state.status.zupt_active is True
+    assert state.velocity_mps.x == pytest.approx(0.0, abs=0.03)
+    assert state.velocity_mps.y == pytest.approx(0.0, abs=0.03)

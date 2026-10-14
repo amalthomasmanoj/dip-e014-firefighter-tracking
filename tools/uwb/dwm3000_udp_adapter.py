@@ -31,10 +31,21 @@ class Dwm3000AnchorSample:
 
 
 @dataclass(frozen=True)
+class Dwm3000SurveyResult:
+    initiator_id: str
+    target_id: str
+    valid: bool
+    distance_mm: int
+    rssi_gap_db: float | None
+    rssi_dbm: float | None
+
+
+@dataclass(frozen=True)
 class Dwm3000Sweep:
     timestamp_ms: int
     tag_id: int
     anchors: tuple[Dwm3000AnchorSample, ...]
+    surveys: tuple[Dwm3000SurveyResult, ...] = ()
 
 
 def _require_non_negative_int(data: dict[str, Any], key: str) -> int:
@@ -52,6 +63,20 @@ def _require_finite_number(data: dict[str, Any], key: str) -> float:
     if not math.isfinite(result):
         raise Dwm3000SweepError(f"field {key!r} must be finite")
     return result
+
+
+def _optional_finite_number(data: dict[str, Any], key: str) -> float | None:
+    value = data.get(key)
+    if value is None:
+        return None
+    return _require_finite_number(data, key)
+
+
+def _anchor_id_from_number(data: dict[str, Any], key: str) -> str:
+    value = _require_non_negative_int(data, key)
+    if value == 0:
+        raise Dwm3000SweepError(f"field {key!r} must be a positive anchor ID")
+    return f"A{value}"
 
 
 def parse_dwm3000_sweep(payload: bytes | str | dict[str, Any]) -> Dwm3000Sweep:
@@ -75,8 +100,8 @@ def parse_dwm3000_sweep(payload: bytes | str | dict[str, Any]) -> Dwm3000Sweep:
     timestamp_ms = _require_non_negative_int(decoded, "t")
     tag_id = _require_non_negative_int(decoded, "tag_id")
     anchors = decoded.get("anchors")
-    if not isinstance(anchors, dict) or not anchors:
-        raise Dwm3000SweepError("field 'anchors' must be a non-empty object")
+    if not isinstance(anchors, dict):
+        raise Dwm3000SweepError("field 'anchors' must be an object")
 
     samples: list[Dwm3000AnchorSample] = []
     for anchor_id, raw_sample in anchors.items():
@@ -102,10 +127,42 @@ def parse_dwm3000_sweep(payload: bytes | str | dict[str, Any]) -> Dwm3000Sweep:
             )
         )
 
+    raw_surveys = decoded.get("surveys", [])
+    if not isinstance(raw_surveys, list):
+        raise Dwm3000SweepError("field 'surveys' must be an array")
+    surveys: list[Dwm3000SurveyResult] = []
+    for index, raw_survey in enumerate(raw_surveys):
+        if not isinstance(raw_survey, dict):
+            raise Dwm3000SweepError(f"survey {index} must be an object")
+        valid = raw_survey.get("ok")
+        if not isinstance(valid, bool):
+            raise Dwm3000SweepError(f"survey {index} field 'ok' must be boolean")
+        distance_mm = _require_non_negative_int(raw_survey, "distance_mm")
+        if distance_mm > 65_535:
+            raise Dwm3000SweepError("field 'distance_mm' exceeds the stage-6 uint16")
+        initiator_id = _anchor_id_from_number(raw_survey, "initiator_id")
+        target_id = _anchor_id_from_number(raw_survey, "target_id")
+        if initiator_id == target_id:
+            raise Dwm3000SweepError("survey anchor IDs must be different")
+        surveys.append(
+            Dwm3000SurveyResult(
+                initiator_id=initiator_id,
+                target_id=target_id,
+                valid=valid,
+                distance_mm=distance_mm,
+                rssi_gap_db=_optional_finite_number(raw_survey, "rssi_gap_db"),
+                rssi_dbm=_optional_finite_number(raw_survey, "rssi_dbm"),
+            )
+        )
+
+    if not samples and not surveys:
+        raise Dwm3000SweepError("datagram must contain an anchor range or survey result")
+
     return Dwm3000Sweep(
         timestamp_ms=timestamp_ms,
         tag_id=tag_id,
         anchors=tuple(samples),
+        surveys=tuple(surveys),
     )
 
 
@@ -131,6 +188,24 @@ def generic_packets_from_sweep(
                     "range_m": sample.distance_cm / 100.0,
                     "valid": True,
                     "quality": None,
+                },
+            }
+        )
+    sequence_offset = len(packets)
+    for offset, survey in enumerate(sweep.surveys):
+        packets.append(
+            {
+                "version": 1,
+                "node_id": survey.initiator_id,
+                "sequence_number": start_sequence_number + sequence_offset + offset,
+                "timestamp_us": sweep.timestamp_ms * 1_000,
+                "type": "uwb_pair_range",
+                "data": {
+                    "peer_id": survey.target_id,
+                    "range_m": survey.distance_mm / 1_000.0,
+                    "valid": survey.valid,
+                    "rssi_gap_db": survey.rssi_gap_db,
+                    "rssi_dbm": survey.rssi_dbm,
                 },
             }
         )
@@ -167,9 +242,10 @@ def run_adapter(
     sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     raw_output: TextIO | None = None
-    sequence_number = 0
+    sequence_numbers_by_node: dict[str, int] = {}
     sweeps_received = 0
     packets_forwarded = 0
+    surveys_received = 0
     parse_errors = 0
     anchors_seen: set[str] = set()
 
@@ -194,14 +270,21 @@ def run_adapter(
                 print(f"Rejected DWM3000 datagram from {source[0]}:{source[1]}: {exc}")
                 continue
 
-            packets = generic_packets_from_sweep(sweep, sequence_number)
-            sequence_number += len(packets)
+            packets = generic_packets_from_sweep(sweep, 0)
             sweeps_received += 1
+            surveys_received += len(sweep.surveys)
             for packet in packets:
+                node_id = packet["node_id"]
+                packet["sequence_number"] = sequence_numbers_by_node.get(node_id, 0)
+                sequence_numbers_by_node[node_id] = packet["sequence_number"] + 1
                 encoded = json.dumps(packet, separators=(",", ":")).encode("utf-8")
                 sender.sendto(encoded, (target_host, target_port))
                 packets_forwarded += 1
-                anchors_seen.add(packet["data"]["anchor_id"])
+                if packet["type"] == "uwb_range":
+                    anchors_seen.add(packet["data"]["anchor_id"])
+                else:
+                    anchors_seen.add(packet["node_id"])
+                    anchors_seen.add(packet["data"]["peer_id"])
     except KeyboardInterrupt:
         pass
     finally:
@@ -211,7 +294,8 @@ def run_adapter(
             raw_output.close()
         print(
             "Adapter summary: "
-            f"sweeps={sweeps_received}, packets={packets_forwarded}, "
+            f"datagrams={sweeps_received}, surveys={surveys_received}, "
+            f"packets={packets_forwarded}, "
             f"parse_errors={parse_errors}, anchors={sorted(anchors_seen)}"
         )
 

@@ -54,22 +54,30 @@ class DemoSensorEstimator:
         self._last_imu_timestamp_us: int | None = None
         self._last_position: tuple[float, float] | None = None
         self._last_position_timestamp_us: int | None = None
+        self._last_velocity_mps = (0.0, 0.0)
         self._yaw_rad = 0.0
+        self._zupt_active = False
         self._uncertainty_m = 1.5
         self._range_median_window = range_median_window
         self._position_filter = PositionEkf2D()
 
-    def set_anchors(self, anchors: Sequence[Anchor]) -> None:
+    def set_anchors(self, anchors: Sequence[Anchor], *, reset_position: bool = False) -> None:
         """Install a known map atomically without mixing ranges from the old map.
 
-        Coordinates remain in the same world frame; retain the position filter.
-        This is not anchor self-survey or relative-frame estimation.
+        Reset the position state when a new relative survey frame is installed;
+        otherwise retain it for same-frame simulation changes.
         """
         self._anchors = list(anchors)
         self._configured_anchor_ids = {anchor.anchor_id for anchor in anchors}
         self._latest_ranges.clear()
         self._range_timestamps.clear()
         self._range_windows.clear()
+        if reset_position:
+            self._position_filter = PositionEkf2D()
+            self._last_position = None
+            self._last_position_timestamp_us = None
+            self._last_velocity_mps = (0.0, 0.0)
+            self._uncertainty_m = 1.5
 
     def update(self, measurement: Measurement) -> EstimatedState | None:
         if isinstance(measurement, ImuMeasurement):
@@ -91,6 +99,23 @@ class DemoSensorEstimator:
         self._last_imu_timestamp_us = measurement.timestamp_us
         self._latest_imu = measurement
         self._imu_window.append(measurement)
+        self._zupt_active = detect_zupt_window(self._imu_window)
+        if not self._zupt_active:
+            return
+
+        estimate = self._position_filter.apply_zero_velocity(measurement.timestamp_us)
+        if estimate is None:
+            return
+        self._last_position = (estimate.x_m, estimate.y_m)
+        self._last_position_timestamp_us = measurement.timestamp_us
+        self._last_velocity_mps = (
+            estimate.velocity_x_mps,
+            estimate.velocity_y_mps,
+        )
+        self._uncertainty_m = max(
+            0.1,
+            min(5.0, max(estimate.sigma_x_m, estimate.sigma_y_m)),
+        )
 
     def _observe_uwb(self, measurement: UwbRangeMeasurement) -> EstimatedState | None:
         if not measurement.valid:
@@ -135,6 +160,10 @@ class DemoSensorEstimator:
 
         self._last_position = (estimate.x_m, estimate.y_m)
         self._last_position_timestamp_us = measurement.timestamp_us
+        self._last_velocity_mps = (
+            estimate.velocity_x_mps,
+            estimate.velocity_y_mps,
+        )
 
         speed_mps = math.hypot(
             estimate.velocity_x_mps,
@@ -164,6 +193,9 @@ class DemoSensorEstimator:
         if self._last_position is not None:
             x_m, y_m = self._last_position
 
+        velocity_x_mps, velocity_y_mps = self._last_velocity_mps
+        speed_mps = math.hypot(velocity_x_mps, velocity_y_mps)
+
         sigma_x_m = 5.0 if self._last_position is None else min(5.0, self._uncertainty_m + 0.5)
         sigma_y_m = sigma_x_m
 
@@ -171,9 +203,9 @@ class DemoSensorEstimator:
             timestamp_us=timestamp_us,
             x_m=x_m,
             y_m=y_m,
-            velocity_x_mps=0.0,
-            velocity_y_mps=0.0,
-            speed_mps=0.0,
+            velocity_x_mps=velocity_x_mps,
+            velocity_y_mps=velocity_y_mps,
+            speed_mps=speed_mps,
             fresh_ranges=fresh_ranges,
             sigma_x_m=sigma_x_m,
             sigma_y_m=sigma_y_m,
@@ -192,8 +224,10 @@ class DemoSensorEstimator:
         sigma_x_m: float,
         sigma_y_m: float,
     ) -> EstimatedState:
-        zupt_active = detect_zupt_window(self._imu_window) if self._imu_window else False
-        activity = self._activity_state(speed_mps=speed_mps, zupt_active=zupt_active)
+        activity = self._activity_state(
+            speed_mps=speed_mps,
+            zupt_active=self._zupt_active,
+        )
 
         return EstimatedState(
             timestamp_us=timestamp_us,
@@ -206,7 +240,7 @@ class DemoSensorEstimator:
                 sigma_z_m=1.0,
             ),
             status=SensorStatus(
-                zupt_active=zupt_active,
+                zupt_active=self._zupt_active,
                 uwb_available=bool(fresh_ranges),
                 active_anchor_count=len(fresh_ranges),
             ),

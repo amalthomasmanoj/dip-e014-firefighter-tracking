@@ -7,8 +7,8 @@
   "properties": {
     "type": { "type": "string", "const": "estimated_state" },
     "source": { "type": "string", "enum": ["simulation", "live", "replay"] },
+    "node_id": { "type": "string", "minLength": 1 },
     "state": { "$ref": "estimated_state.schema.json" }
   },
   "additionalProperties": false
 }
-

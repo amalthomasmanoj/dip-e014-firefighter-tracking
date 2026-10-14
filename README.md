@@ -76,7 +76,8 @@ python3 -m tools.uwb.dwm3000_udp_adapter
 ```
 
 See [tools/uwb/README.md](tools/uwb/README.md) for packet details and optional
-raw sweep capture. The adapter does not change the shared packet contract.
+raw sweep capture. The adapter is the hardware-edge producer for generic
+`uwb_range` and `uwb_pair_range` contract packets.
 
 The estimator can use any three or more configured, non-collinear anchors; the
 IDs do not have to be `A1`, `A2`, and `A3`. For real hardware, copy
@@ -95,6 +96,17 @@ contain those three IDs and their measured coordinates. The backend exposes the
 active configuration at `GET /anchors`. One or two ranges identify circles, not
 a unique 2-D tag position, so the UI shows them as detected but unresolved.
 
+The anchor-v2 radio protocol can survey `A1-A2`, `A1-A3`, and `A2-A3`. Once the
+tag continuously commands those stage-5 exchanges and forwards the stage-6
+results described in [tools/uwb/README.md](tools/uwb/README.md), the backend
+builds a relative anchor map and updates `GET /anchors` when sustained physical
+movement is detected. `GET /uwb/anchor-map` exposes map version, freshness,
+accepted/raw/filtered pair ranges, and RF diagnostics. Flashing anchor v2 alone
+is insufficient because the current laptop link is the tag's UDP broadcast.
+For two live firefighter tags, use unique `tag_id` values and one designated
+survey-coordinator tag. The backend keeps each tag's ranges, estimator, marker,
+and trajectory separate while both use the same committed anchor map.
+
 In live mode the UI disables keyboard demo controls immediately, independently
 of whether the estimator has produced a position. It keeps all configured
 anchors visible and shows fresh real ranges. With fewer than three mapped
@@ -106,9 +118,15 @@ configuration are listed as unmapped instead of silently disappearing.
 Live UWB positions are derived only from synchronized anchor sweeps, using a
 short per-anchor median window followed by the constant-velocity 2-D position
 EKF in `backend/fusion/position_ekf.py`. The EKF rejects implausible innovation
-jumps and applies a low-speed deadband to reduce stationary marker jitter. This
-is a UWB position filter, not the final IMU error-state Kalman filter. Raw range
-values remain unchanged at `GET /uwb/ranges` for diagnostics and replay.
+jumps and applies a low-speed deadband to reduce stationary marker jitter. When
+generic foot-IMU packets use the same `node_id` and timestamp clock as their UWB
+tag, a detected stationary window also applies a zero-velocity update to the
+position EKF. This arrests false coasting without assuming undocumented IMU
+axes. The supplied DWM3000 tag-v3 firmware currently emits UWB sweeps only, so
+the live ZUPT path becomes active only after an IMU producer is connected. Full
+acceleration propagation remains blocked until the sensor-to-shoe transform and
+calibration are measured and documented; this is not yet the production ESKF.
+Raw range values remain unchanged at `GET /uwb/ranges` for diagnostics and replay.
 The backend exposes the current fresh-range view at `GET /uwb/ranges` without
 adding hardware-specific fields to the shared measurement contract.
 

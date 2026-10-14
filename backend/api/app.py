@@ -12,6 +12,7 @@ from backend.api.live import LiveUdpStateHub
 from backend.api.websocket import state_messages_for_source
 from backend.config.source import SourceMode, source_mode_from_env
 from backend.simulation.world import SimulationWorld
+from backend.uwb.anchor_map import LiveAnchorMapTracker
 from backend.uwb.anchors import Anchor, anchors_from_env
 from backend.uwb.live_ranges import LiveUwbRangeTracker
 
@@ -32,7 +33,8 @@ def create_app(
     active_source_mode = source_mode or source_mode_from_env()
     configured_anchors = tuple(anchors) if anchors is not None else anchors_from_env()
     live_uwb_ranges = LiveUwbRangeTracker()
-    live_hub = LiveUdpStateHub(live_uwb_ranges, configured_anchors)
+    live_anchor_map = LiveAnchorMapTracker(configured_anchors)
+    live_hub = LiveUdpStateHub(live_uwb_ranges, configured_anchors, live_anchor_map)
     simulation = (
         SimulationWorld(configured_anchors) if active_source_mode is SourceMode.SIMULATION else None
     )
@@ -59,6 +61,7 @@ def create_app(
     )
     app.state.live_uwb_ranges = live_uwb_ranges
     app.state.live_hub = live_hub
+    app.state.live_anchor_map = live_anchor_map
     app.state.simulation = simulation
 
     @app.get("/health")
@@ -72,7 +75,7 @@ def create_app(
 
     @app.get("/anchors")
     def anchors() -> list[dict[str, float | str]]:
-        current = simulation.anchors if simulation is not None else configured_anchors
+        current = simulation.anchors if simulation is not None else live_anchor_map.anchors
         return [anchor.__dict__ for anchor in current]
 
     @app.get("/simulation")
@@ -99,8 +102,12 @@ def create_app(
         return {"accepted": True}
 
     @app.get("/uwb/ranges")
-    def uwb_ranges() -> dict[str, object]:
-        return live_uwb_ranges.snapshot()
+    def uwb_ranges(tag_node_id: str | None = None) -> dict[str, object]:
+        return live_uwb_ranges.snapshot(node_id=tag_node_id)
+
+    @app.get("/uwb/anchor-map")
+    def uwb_anchor_map() -> dict[str, object]:
+        return live_anchor_map.snapshot()
 
     @app.websocket("/ws/state")
     async def state_websocket(websocket: WebSocket) -> None:

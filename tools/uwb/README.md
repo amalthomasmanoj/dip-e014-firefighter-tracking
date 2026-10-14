@@ -42,10 +42,13 @@ to `surveys`. A survey-only datagram may use an empty `anchors` object:
 ```
 
 Failed stage-6 results use `ok: false`, `distance_mm: 0`, and `null` for both
-RSSI fields. The tag should continuously round-robin the three required pairs
+RSSI fields. One designated survey-coordinator tag should continuously
+round-robin the three required pairs
 `A1-A2`, `A1-A3`, and `A2-A3`, while retaining its collision-free normal tag
-ranging schedule. The laptop cannot initiate stage 5 through the existing
-one-way UDP broadcast; this small tag-firmware scheduler/forwarder is required.
+ranging schedule. Additional firefighter tags should use assigned ranging
+slots and must not start a second unsynchronized survey loop. The laptop cannot
+initiate stage 5 through the existing one-way UDP broadcast; this small
+tag-firmware scheduler/forwarder is required.
 
 The adapter is intentionally outside the backend parser. DWM3000-specific
 field names, centimetre-to-metre conversion, and sweep expansion stay at the

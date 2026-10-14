@@ -36,6 +36,7 @@ export type EstimatedState = {
 export type StateMessage = {
   type: "estimated_state";
   source: "simulation" | "live" | "replay";
+  node_id?: string;
   state: EstimatedState;
 };
 

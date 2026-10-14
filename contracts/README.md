@@ -15,3 +15,7 @@ The 2026-10 anchor-survey change adds `uwb_pair_range` to packet version 1.
 This is backward compatible: existing `imu` and `uwb_range` packets are
 unchanged. The DWM3000 edge adapter produces the new type, backend ingestion
 parses it, and the live anchor-map tracker consumes it.
+
+Live WebSocket state messages may include `node_id` so independent tag
+estimators can share one stream. The field is additive and optional; existing
+simulation and replay messages remain valid.

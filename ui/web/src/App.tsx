@@ -7,6 +7,7 @@ import {
   fetchLiveUwbRanges,
 } from "./api/backend";
 import { connectStateStream } from "./api/websocket";
+import { appendLiveTrack } from "./api/live";
 import { BuildingMap } from "./components/BuildingMap/BuildingMap";
 import { DigitalTwinView } from "./components/DigitalTwinView";
 import { ExperimentPlot } from "./components/ExperimentPlot";
@@ -17,7 +18,6 @@ import { SimulationControls } from "./components/SimulationControls";
 import {
   Anchor,
   BackendSource,
-  EstimatedState,
   LiveUwbSnapshot,
   LiveAnchorMapSnapshot,
   StateMessage,
@@ -52,11 +52,12 @@ const emptyLiveAnchorMap: LiveAnchorMapSnapshot = {
 export default function App() {
   const [anchors, setAnchors] = useState<Anchor[]>(fallbackAnchors);
   const [connected, setConnected] = useState(false);
-  const [trajectory, setTrajectory] = useState<EstimatedState[]>([]);
   const [simulation, setSimulation] = useState<SimulationSnapshot | null>(null);
   const [tracks, setTracks] = useState<FirefighterTrack[]>([]);
+  const [liveTracks, setLiveTracks] = useState<FirefighterTrack[]>([]);
   const [simulationOnline, setSimulationOnline] = useState(false);
   const [selectedTag, setSelectedTag] = useState("sim_tag_10");
+  const [selectedLiveTag, setSelectedLiveTag] = useState("");
   const [source, setSource] = useState<BackendSource | null>(null);
   const [liveUwb, setLiveUwb] = useState<LiveUwbSnapshot>(emptyLiveUwbSnapshot);
   const [liveAnchorMap, setLiveAnchorMap] = useState<LiveAnchorMapSnapshot>(emptyLiveAnchorMap);
@@ -102,7 +103,9 @@ export default function App() {
     const handleMessage = (message: StateMessage) => {
       setSource(message.source);
       if (message.source === "live") {
-        setTrajectory((previous) => [...previous.slice(-180), message.state]);
+        const nodeId = message.node_id ?? "live_tag";
+        setSelectedLiveTag((current) => current || nodeId);
+        setLiveTracks((previous) => appendLiveTrack(previous, message));
       }
     };
 
@@ -137,7 +140,7 @@ export default function App() {
 
     let cancelled = false;
     const refresh = () => {
-      fetchLiveUwbRanges()
+      fetchLiveUwbRanges(selectedLiveTag || undefined)
         .then((snapshot) => {
           if (!cancelled) {
             setLiveUwb(snapshot);
@@ -148,7 +151,7 @@ export default function App() {
         .then((snapshot) => {
           if (!cancelled) {
             if (snapshot.map_version !== liveMapVersionRef.current) {
-              setTrajectory([]);
+              setLiveTracks([]);
               liveMapVersionRef.current = snapshot.map_version;
             }
             setLiveAnchorMap(snapshot);
@@ -163,7 +166,7 @@ export default function App() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [source]);
+  }, [source, selectedLiveTag]);
 
   useEffect(() => {
     if (source !== "simulation") return;
@@ -193,10 +196,16 @@ export default function App() {
   }, [source]);
 
   const activeAnchors = source === "simulation" && simulation ? simulation.anchors : anchors;
-  const activeTracks = source === "simulation" ? tracks : undefined;
-  const selectedTrack = tracks.find((tag) => tag.node_id === selectedTag);
-  const activeTrajectory = source === "simulation" ? selectedTrack?.trajectory ?? [] : trajectory;
-  const currentState = source === "simulation" ? selectedTrack?.state ?? null : activeTrajectory.at(-1) ?? null;
+  const activeTracks = source === "simulation"
+    ? tracks
+    : source === "live" ? liveTracks : undefined;
+  const selectedTrack = source === "simulation"
+    ? tracks.find((tag) => tag.node_id === selectedTag)
+    : source === "live"
+      ? liveTracks.find((tag) => tag.node_id === selectedLiveTag) ?? liveTracks[0]
+      : undefined;
+  const activeTrajectory = selectedTrack?.trajectory ?? [];
+  const currentState = selectedTrack?.state ?? activeTrajectory.at(-1) ?? null;
   const displayConnected = source === "simulation" ? simulationOnline : connected;
   const usableLiveAnchorCount = useMemo(() => {
     const configuredIds = new Set(anchors.map((anchor) => anchor.anchor_id));
@@ -261,6 +270,20 @@ export default function App() {
               </select>
             </section>
           </> : null}
+          {source === "live" && liveTracks.length > 1 ? (
+            <section className="side-panel">
+              <label htmlFor="inspected-live-firefighter">Inspect firefighter</label>
+              <select
+                id="inspected-live-firefighter"
+                value={selectedTrack?.node_id ?? ""}
+                onChange={(event) => setSelectedLiveTag(event.target.value)}
+              >
+                {liveTracks.map((tag) => (
+                  <option key={tag.node_id} value={tag.node_id}>{tag.label}</option>
+                ))}
+              </select>
+            </section>
+          ) : null}
           <StatePanel state={visualizedState} />
           <SensorStatus
             state={visualizedState}

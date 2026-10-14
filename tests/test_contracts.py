@@ -45,3 +45,11 @@ def test_websocket_schema_accepts_estimated_state_message() -> None:
             "state": load_json(CONTRACTS / "examples" / "estimated_state.json"),
         }
     )
+    validator.validate(
+        {
+            "type": "estimated_state",
+            "source": "live",
+            "node_id": "dwm3000_tag_10",
+            "state": load_json(CONTRACTS / "examples" / "estimated_state.json"),
+        }
+    )

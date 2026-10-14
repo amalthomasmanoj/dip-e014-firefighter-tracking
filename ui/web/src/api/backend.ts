@@ -19,8 +19,9 @@ export function backendSourceFromHealth(health: BackendHealth): BackendSource {
   return health.source === "udp" ? "live" : health.source;
 }
 
-export async function fetchLiveUwbRanges(): Promise<LiveUwbSnapshot> {
-  const response = await fetch(`${baseUrl}/uwb/ranges`);
+export async function fetchLiveUwbRanges(tagNodeId?: string): Promise<LiveUwbSnapshot> {
+  const query = tagNodeId ? `?tag_node_id=${encodeURIComponent(tagNodeId)}` : "";
+  const response = await fetch(`${baseUrl}/uwb/ranges${query}`);
   if (!response.ok) {
     throw new Error(`failed to load live UWB ranges: ${response.status}`);
   }

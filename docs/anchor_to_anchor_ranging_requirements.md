@@ -253,8 +253,8 @@ The current implementation includes:
 - contract, adapter, solver, movement, and stale-data tests.
 
 Raw replay remains available through the adapter's append-only JSONL capture.
-Multi-tag state separation and a robust four-or-more-anchor solver remain
-follow-up work.
+Live tags have independent range windows, estimators, trajectories, and UI
+selection. A robust four-or-more-anchor solver remains follow-up work.
 
 The UI must only render coordinates produced by the backend. It must not
 perform anchor localization or tag trilateration.
@@ -298,7 +298,7 @@ perform anchor localization or tag trilateration.
 
 ## Immediate Hardware Step
 
-Update the tag firmware to continuously schedule the three stage-5 pair
+Designate one tag to continuously schedule the three stage-5 pair
 commands and forward every stage-6 result using the JSON in
 `tools/uwb/README.md`. Then capture stationary and moved-anchor datasets to
 validate timing, RF accuracy, the 0.25 m movement threshold, and recovery.

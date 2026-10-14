@@ -103,6 +103,9 @@ builds a relative anchor map and updates `GET /anchors` when sustained physical
 movement is detected. `GET /uwb/anchor-map` exposes map version, freshness,
 accepted/raw/filtered pair ranges, and RF diagnostics. Flashing anchor v2 alone
 is insufficient because the current laptop link is the tag's UDP broadcast.
+For two live firefighter tags, use unique `tag_id` values and one designated
+survey-coordinator tag. The backend keeps each tag's ranges, estimator, marker,
+and trajectory separate while both use the same committed anchor map.
 
 In live mode the UI disables keyboard demo controls immediately, independently
 of whether the estimator has produced a position. It keeps all configured

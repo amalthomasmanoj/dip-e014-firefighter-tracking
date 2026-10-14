@@ -102,8 +102,8 @@ def create_app(
         return {"accepted": True}
 
     @app.get("/uwb/ranges")
-    def uwb_ranges() -> dict[str, object]:
-        return live_uwb_ranges.snapshot()
+    def uwb_ranges(tag_node_id: str | None = None) -> dict[str, object]:
+        return live_uwb_ranges.snapshot(node_id=tag_node_id)
 
     @app.get("/uwb/anchor-map")
     def uwb_anchor_map() -> dict[str, object]:

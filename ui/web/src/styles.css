@@ -254,6 +254,13 @@ body {
   padding: 12px 0 0;
 }
 
+.sensor-warning {
+  margin: 12px 0 0;
+  color: #ffba66;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
 .range-list li {
   display: flex;
   justify-content: space-between;
@@ -333,3 +340,18 @@ dd {
     min-height: 288px;
   }
 }
+
+.simulation-controls p { color: #627083; font-size: 12px; line-height: 1.5; }
+.simulation-controls label, .sidebar label { display: block; margin-bottom: 6px; }
+.sidebar select { width: 100%; padding: 8px; margin-bottom: 12px; }
+.simulation-controls button { padding: 8px 12px; cursor: pointer; border: 1px solid #bac9d7; border-radius: 5px; background: #f5f9fd; }
+.simulation-controls button:disabled { cursor: default; opacity: 0.5; }
+.movement-buttons { display: flex; gap: 8px; margin-bottom: 10px; }
+.range-list small { display: block; color: #627083; font-size: 10px; margin-top: 3px; }
+.anchor-peer-link { stroke: #4a9a83; stroke-width: 2; stroke-dasharray: 6 6; animation: peer-exchange 1s linear infinite; }
+@keyframes peer-exchange { to { stroke-dashoffset: -24; } }
+@media (prefers-reduced-motion: reduce) { .anchor-peer-link { animation: none; } }
+.firefighter-label { font-size: 12px; font-weight: 700; fill: #a73722; paint-order: stroke; stroke: white; stroke-width: 3px; }
+.firefighter-1 .responder-person, .firefighter-1 .responder-person-head { stroke: #008f92; }
+.firefighter-1 .trajectory-line, .firefighter-1 .uncertainty-ellipse { stroke: #008f92; }
+.firefighter-1 .firefighter-label { fill: #008f92; }

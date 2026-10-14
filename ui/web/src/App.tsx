@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { fetchAnchors } from "./api/anchors";
 import {
   backendSourceFromHealth,
@@ -11,13 +11,8 @@ import { DigitalTwinView } from "./components/DigitalTwinView";
 import { ExperimentPlot } from "./components/ExperimentPlot";
 import { SensorStatus } from "./components/SensorStatus";
 import { StatePanel } from "./components/StatePanel";
-import {
-  fallbackDemoState,
-  keyboardDemoEnabled,
-  moveDemoState,
-  stopDemoState,
-  toggleDemoCrouch,
-} from "./demo/keyboardDemo";
+import { appendSimulationTracks, fetchSimulation, FirefighterTrack, SimulationSnapshot } from "./api/simulation";
+import { SimulationControls } from "./components/SimulationControls";
 import {
   Anchor,
   BackendSource,
@@ -45,16 +40,25 @@ export default function App() {
   const [anchors, setAnchors] = useState<Anchor[]>(fallbackAnchors);
   const [connected, setConnected] = useState(false);
   const [trajectory, setTrajectory] = useState<EstimatedState[]>([]);
-  const [demoTrajectory, setDemoTrajectory] = useState<EstimatedState[]>([]);
+  const [simulation, setSimulation] = useState<SimulationSnapshot | null>(null);
+  const [tracks, setTracks] = useState<FirefighterTrack[]>([]);
+  const [simulationOnline, setSimulationOnline] = useState(false);
+  const [selectedTag, setSelectedTag] = useState("sim_tag_10");
   const [source, setSource] = useState<BackendSource | null>(null);
   const [liveUwb, setLiveUwb] = useState<LiveUwbSnapshot>(emptyLiveUwbSnapshot);
-  const stopTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     fetchAnchors()
       .then(setAnchors)
       .catch(() => setAnchors(fallbackAnchors));
   }, []);
+
+  useEffect(() => {
+    if (!connected) {
+      return;
+    }
+    fetchAnchors().then(setAnchors).catch(() => undefined);
+  }, [connected]);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,9 +88,7 @@ export default function App() {
       setSource(message.source);
       if (message.source === "live") {
         setTrajectory((previous) => [...previous.slice(-180), message.state]);
-        return;
       }
-      setDemoTrajectory((previous) => (previous.length ? previous : [message.state]));
     };
 
     const openSocket = () => {
@@ -136,75 +138,48 @@ export default function App() {
   }, [source]);
 
   useEffect(() => {
-    if (!keyboardDemoEnabled(source)) {
-      return;
-    }
-
-    function updateDemoState(updater: (state: EstimatedState) => EstimatedState) {
-      setDemoTrajectory((previous) => {
-        const current = previous.at(-1) ?? fallbackDemoState();
-        const next = updater(current);
-        return [...previous.slice(-180), next];
-      });
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.metaKey || event.ctrlKey || event.altKey) {
-        return;
-      }
-
-      const movementByKey: Record<string, { dx: number; dy: number } | undefined> = {
-        ArrowUp: { dx: 0, dy: 1 },
-        ArrowDown: { dx: 0, dy: -1 },
-        ArrowLeft: { dx: -1, dy: 0 },
-        ArrowRight: { dx: 1, dy: 0 },
-      };
-      const movementByCode: Record<string, { dx: number; dy: number } | undefined> = {
-        Numpad8: { dx: 0, dy: 1 },
-        Numpad2: { dx: 0, dy: -1 },
-        Numpad4: { dx: -1, dy: 0 },
-        Numpad6: { dx: 1, dy: 0 },
-      };
-      const movement = movementByKey[event.key] ?? movementByCode[event.code];
-
-      if (movement) {
-        event.preventDefault();
-        updateDemoState((state) => moveDemoState(state, movement.dx, movement.dy));
-        if (stopTimerRef.current !== null) {
-          window.clearTimeout(stopTimerRef.current);
+    if (source !== "simulation") return;
+    let disposed = false;
+    let timer: number | undefined;
+    let lastTimestamp = -1;
+    let lastAdvance = performance.now();
+    async function refresh() {
+      try {
+        const snapshot = await fetchSimulation();
+        if (disposed) return;
+        if (snapshot.timestamp_us !== lastTimestamp) {
+          lastTimestamp = snapshot.timestamp_us;
+          lastAdvance = performance.now();
         }
-        stopTimerRef.current = window.setTimeout(() => {
-          updateDemoState(stopDemoState);
-        }, 180);
-      }
-
-      if (event.key.toLowerCase() === "c") {
-        event.preventDefault();
-        updateDemoState(toggleDemoCrouch);
+        setSimulationOnline(performance.now() - lastAdvance < 1500);
+        setSimulation(snapshot);
+        setTracks((previous) => appendSimulationTracks(previous, snapshot));
+      } catch {
+        if (!disposed) setSimulationOnline(false);
+      } finally {
+        if (!disposed) timer = window.setTimeout(refresh, 100);
       }
     }
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      if (stopTimerRef.current !== null) {
-        window.clearTimeout(stopTimerRef.current);
-        stopTimerRef.current = null;
-      }
-    };
+    void refresh();
+    return () => { disposed = true; window.clearTimeout(timer); };
   }, [source]);
 
-  const activeTrajectory = source === "live" ? trajectory : demoTrajectory;
-  const currentState = useMemo(() => activeTrajectory.at(-1) ?? null, [activeTrajectory]);
+  const activeAnchors = source === "simulation" && simulation ? simulation.anchors : anchors;
+  const activeTracks = source === "simulation" ? tracks : undefined;
+  const selectedTrack = tracks.find((tag) => tag.node_id === selectedTag);
+  const activeTrajectory = source === "simulation" ? selectedTrack?.trajectory ?? [] : trajectory;
+  const currentState = source === "simulation" ? selectedTrack?.state ?? null : activeTrajectory.at(-1) ?? null;
+  const displayConnected = source === "simulation" ? simulationOnline : connected;
+  const usableLiveAnchorCount = useMemo(() => {
+    const configuredIds = new Set(anchors.map((anchor) => anchor.anchor_id));
+    return liveUwb.ranges.filter((range) => configuredIds.has(range.anchor_id)).length;
+  }, [anchors, liveUwb.ranges]);
   const visualizedState =
-    source === "live" && liveUwb.active_anchor_count < 3 ? null : currentState;
-  const visibleAnchors = useMemo(() => {
-    if (source !== "live") {
-      return anchors;
-    }
-    const activeIds = new Set(liveUwb.ranges.map((range) => range.anchor_id));
-    return anchors.filter((anchor) => activeIds.has(anchor.anchor_id));
-  }, [anchors, liveUwb.ranges, source]);
+    source === "live" &&
+    (usableLiveAnchorCount < 3 ||
+      (currentState?.status.active_anchor_count ?? 0) < 3)
+      ? null
+      : currentState;
 
   return (
     <main className="app-shell">
@@ -213,30 +188,47 @@ export default function App() {
           <h1>E014 Firefighter Tracking</h1>
           <p>UWB + foot IMU/ZUPT indoor trajectory estimation</p>
         </div>
-        <span className={connected ? "status-pill live" : "status-pill"}>{connected ? "LIVE" : "OFFLINE"}</span>
+        <span className={displayConnected ? "status-pill live" : "status-pill"}>{displayConnected ? source === "simulation" ? "SIMULATION" : "LIVE" : "OFFLINE"}</span>
       </header>
       <div className="workspace">
         <div className="main-views">
           <DigitalTwinView
-            anchors={visibleAnchors}
+            anchors={activeAnchors}
             state={visualizedState}
             trajectory={activeTrajectory}
             liveUwb={source === "live" ? liveUwb : null}
+            usableAnchorCount={usableLiveAnchorCount}
+            firefighters={activeTracks}
+            anchorLinks={source === "simulation" && simulationOnline ? simulation?.anchor_links : undefined}
           />
           <BuildingMap
-            anchors={visibleAnchors}
+            anchors={activeAnchors}
             currentState={visualizedState}
             trajectory={activeTrajectory}
             liveUwb={source === "live" ? liveUwb : null}
+            usableAnchorCount={usableLiveAnchorCount}
+            firefighters={activeTracks}
+            anchorLinks={source === "simulation" && simulationOnline ? simulation?.anchor_links : undefined}
           />
         </div>
         <aside className="sidebar">
+          {source === "simulation" ? <>
+            <SimulationControls snapshot={simulation} online={simulationOnline} />
+            <section className="side-panel">
+              <label htmlFor="inspected-firefighter">Inspect firefighter</label>
+              <select id="inspected-firefighter" value={selectedTag} onChange={(event) => setSelectedTag(event.target.value)}>
+                {tracks.map((tag) => <option key={tag.node_id} value={tag.node_id}>{tag.label}</option>)}
+              </select>
+            </section>
+          </> : null}
           <StatePanel state={visualizedState} />
           <SensorStatus
             state={visualizedState}
-            connected={connected}
+            connected={displayConnected}
             source={source}
             liveUwb={source === "live" ? liveUwb : null}
+            anchors={activeAnchors}
+            usableAnchorCount={usableLiveAnchorCount}
           />
           <ExperimentPlot trajectory={activeTrajectory} />
         </aside>

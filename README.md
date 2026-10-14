@@ -49,6 +49,13 @@ mode, but recorded replay is a placeholder until MCAP replay is implemented.
 In live mode, IMU-only packets still publish a held-position state for hardware
 bring-up; UWB range packets are required for absolute movement through the map.
 
+Simulation now includes **two independently tracked firefighters**, movable
+anchors, and continuous simulated anchor-pair exchanges. Select a firefighter
+or anchor in the UI's **Simulation controls**, then use the direction buttons
+or arrow keys to move it. Both views show separate firefighter trails and
+updated anchor links. See [simulation controls and API](docs/simulation.md)
+for the fixed-frame model and hardware limitations.
+
 WebSocket endpoint:
 
 ```text
@@ -71,11 +78,37 @@ python3 -m tools.uwb.dwm3000_udp_adapter
 See [tools/uwb/README.md](tools/uwb/README.md) for packet details and optional
 raw sweep capture. The adapter does not change the shared packet contract.
 
+The estimator can use any three or more configured, non-collinear anchors; the
+IDs do not have to be `A1`, `A2`, and `A3`. For real hardware, copy
+`backend/config/anchors.example.yaml` to the ignored
+`backend/config/anchors.local.yaml`, change the IDs and coordinates to the
+measured installation, and start the live backend with:
+
+```bash
+E014_SOURCE=udp \
+E014_ANCHORS_CONFIG=backend/config/anchors.local.yaml \
+uvicorn backend.api.app:app --host 0.0.0.0 --port 8000
+```
+
+For example, if the responding devices are `A1`, `A2`, and `A4`, the YAML must
+contain those three IDs and their measured coordinates. The backend exposes the
+active configuration at `GET /anchors`. One or two ranges identify circles, not
+a unique 2-D tag position, so the UI shows them as detected but unresolved.
+
 In live mode the UI disables keyboard demo controls immediately, independently
-of whether the estimator has produced a position. It shows only anchors with a
-fresh real range. With fewer than three anchors it renders labelled range
-circles and marks the tag position as unresolved; with a solvable position it
-renders the firefighter and thin dotted, labelled tag-to-anchor range lines.
+of whether the estimator has produced a position. It keeps all configured
+anchors visible and shows fresh real ranges. With fewer than three mapped
+anchors it renders labelled range circles and marks the tag position as
+unresolved; with a solvable position it renders the firefighter and thin
+dotted, labelled tag-to-anchor range lines. Live IDs missing from the anchor
+configuration are listed as unmapped instead of silently disappearing.
+
+Live UWB positions are derived only from synchronized anchor sweeps, using a
+short per-anchor median window followed by the constant-velocity 2-D position
+EKF in `backend/fusion/position_ekf.py`. The EKF rejects implausible innovation
+jumps and applies a low-speed deadband to reduce stationary marker jitter. This
+is a UWB position filter, not the final IMU error-state Kalman filter. Raw range
+values remain unchanged at `GET /uwb/ranges` for diagnostics and replay.
 The backend exposes the current fresh-range view at `GET /uwb/ranges` without
 adding hardware-specific fields to the shared measurement contract.
 

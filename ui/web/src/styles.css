@@ -118,6 +118,20 @@ body {
   min-height: 328px;
 }
 
+.twin-range-strip {
+  background: #f5f9fd;
+  border-bottom: 1px solid #dce8f3;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 7px 12px;
+}
+
+.twin-range-strip span {
+  color: #3974a8;
+  font-size: 12px;
+}
+
 .twin-canvas canvas {
   display: block;
   height: 100%;
@@ -179,10 +193,77 @@ body {
   stroke-width: 3;
 }
 
-.responder-marker {
-  fill: #e53935;
-  stroke: #ffffff;
+.responder-person {
+  fill: none;
+  stroke: #d8322b;
+  stroke-linecap: round;
+  stroke-linejoin: round;
   stroke-width: 4;
+}
+
+.responder-person-head {
+  fill: #ffd447;
+  stroke: #d8322b;
+  stroke-width: 3;
+}
+
+.uwb-range-line,
+.uwb-range-circle {
+  fill: none;
+  opacity: 0.72;
+  stroke: #72a7d8;
+  stroke-dasharray: 3 7;
+  stroke-linecap: round;
+  stroke-width: 1.5;
+}
+
+.uwb-range-label {
+  fill: #3974a8;
+  font-size: 12px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: #ffffff;
+  stroke-width: 4px;
+}
+
+.unresolved-tag circle {
+  fill: #ffd447;
+  stroke: #d8322b;
+  stroke-width: 2;
+}
+
+.unresolved-tag path {
+  fill: none;
+  stroke: #d8322b;
+  stroke-linecap: round;
+  stroke-width: 3;
+}
+
+.unresolved-tag text {
+  fill: #5a6878;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.range-list {
+  border-top: 1px solid #e2e8ef;
+  display: grid;
+  gap: 7px;
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 12px 0 0;
+}
+
+.sensor-warning {
+  margin: 12px 0 0;
+  color: #ffba66;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.range-list li {
+  display: flex;
+  justify-content: space-between;
 }
 
 .sidebar {
@@ -259,3 +340,18 @@ dd {
     min-height: 288px;
   }
 }
+
+.simulation-controls p { color: #627083; font-size: 12px; line-height: 1.5; }
+.simulation-controls label, .sidebar label { display: block; margin-bottom: 6px; }
+.sidebar select { width: 100%; padding: 8px; margin-bottom: 12px; }
+.simulation-controls button { padding: 8px 12px; cursor: pointer; border: 1px solid #bac9d7; border-radius: 5px; background: #f5f9fd; }
+.simulation-controls button:disabled { cursor: default; opacity: 0.5; }
+.movement-buttons { display: flex; gap: 8px; margin-bottom: 10px; }
+.range-list small { display: block; color: #627083; font-size: 10px; margin-top: 3px; }
+.anchor-peer-link { stroke: #4a9a83; stroke-width: 2; stroke-dasharray: 6 6; animation: peer-exchange 1s linear infinite; }
+@keyframes peer-exchange { to { stroke-dashoffset: -24; } }
+@media (prefers-reduced-motion: reduce) { .anchor-peer-link { animation: none; } }
+.firefighter-label { font-size: 12px; font-weight: 700; fill: #a73722; paint-order: stroke; stroke: white; stroke-width: 3px; }
+.firefighter-1 .responder-person, .firefighter-1 .responder-person-head { stroke: #008f92; }
+.firefighter-1 .trajectory-line, .firefighter-1 .uncertainty-ellipse { stroke: #008f92; }
+.firefighter-1 .firefighter-label { fill: #008f92; }

@@ -1,12 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
   fallbackDemoState,
+  keyboardDemoEnabled,
   moveDemoState,
   stopDemoState,
   toggleDemoCrouch,
 } from "./keyboardDemo";
 
 describe("keyboard demo state", () => {
+  it("enables keyboard controls only for explicit simulation mode", () => {
+    expect(keyboardDemoEnabled("simulation")).toBe(true);
+    expect(keyboardDemoEnabled("live")).toBe(false);
+    expect(keyboardDemoEnabled("replay")).toBe(false);
+    expect(keyboardDemoEnabled(null)).toBe(false);
+  });
+
   it("moves as estimated state without changing the contract shape", () => {
     const moved = moveDemoState(fallbackDemoState(), 1, 0);
 

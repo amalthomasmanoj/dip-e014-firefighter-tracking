@@ -5,6 +5,7 @@ import pytest
 from backend.api.app import create_app
 from backend.api.websocket import serialize_state_message
 from backend.config.source import SourceMode, parse_source_mode, source_mode_from_env
+from backend.uwb.anchors import Anchor
 from tools.fake_data.simulated_walk import simulated_state_stream
 
 
@@ -67,3 +68,17 @@ def test_health_reports_active_source_mode(
         "source": source_mode.value,
         "source_status": source_status,
     }
+
+
+def test_anchors_endpoint_uses_runtime_configuration() -> None:
+    configured = (
+        Anchor("A1", 0.0, 0.0),
+        Anchor("A2", 4.0, 0.0),
+        Anchor("A4", 0.0, 3.0),
+    )
+    app = create_app(source_mode=SourceMode.UDP, anchors=configured)
+    anchors_route = next(
+        route for route in app.routes if getattr(route, "path", None) == "/anchors"
+    )
+
+    assert [item["anchor_id"] for item in anchors_route.endpoint()] == ["A1", "A2", "A4"]

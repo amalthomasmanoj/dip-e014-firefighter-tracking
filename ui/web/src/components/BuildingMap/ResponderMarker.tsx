@@ -31,9 +31,12 @@ export function ResponderMarker({ state, cx, cy, transform }: Props) {
   const heading = headingEndpoint(state, transform);
 
   return (
-    <g>
+    <g aria-label="tracked firefighter">
       <line className="heading-line" x1={cx} y1={cy} x2={heading.x} y2={heading.y} />
-      <circle className="responder-marker" cx={cx} cy={cy} r="10" />
+      <g className="responder-person" transform={`translate(${cx} ${cy})`}>
+        <circle className="responder-person-head" cx="0" cy="-12" r="5" />
+        <path d="M0 -7 L0 7 M-9 -1 L9 -1 M0 7 L-7 17 M0 7 L7 17" />
+      </g>
     </g>
   );
 }

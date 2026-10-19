@@ -13,3 +13,7 @@ Candidate future records:
 
 Do not add speculative decisions.
 
+## Records
+
+- [0001 - Add `lying_down` to the posture contract](0001-lying-down-posture.md)
+

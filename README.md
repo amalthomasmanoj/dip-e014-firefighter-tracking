@@ -129,6 +129,26 @@ npm test
 npm run build
 ```
 
+## IMU Heading and Posture
+
+Heading ("direction") and posture (`standing` / `crouching` / `lying_down`)
+are published in every `EstimatedState`. Both are injection points: supply
+your own implementation with `E014_HEADING_ESTIMATOR` and
+`E014_ACTIVITY_CLASSIFIER` instead of editing the estimator.
+
+```bash
+E014_SOURCE=udp E014_ACTIVITY_CLASSIFIER=my_package.posture:MyPosture uvicorn backend.api.app:app --host 0.0.0.0 --port 8000
+```
+
+Drive the UI without hardware using scripted IMU scenarios:
+
+```bash
+python -m tools.fake_data.imu_scenario --scenario full --udp --realtime --loop
+```
+
+See [docs/imu_heading_posture_integration.md](docs/imu_heading_posture_integration.md)
+for the interfaces, the test path, and the IMU wiring/firmware steps.
+
 ## Architecture
 
 Start with [docs/architecture.md](docs/architecture.md), [docs/coordinate_frames.md](docs/coordinate_frames.md), and [contracts/README.md](contracts/README.md).

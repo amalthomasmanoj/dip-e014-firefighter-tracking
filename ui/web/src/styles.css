@@ -355,3 +355,19 @@ dd {
 .firefighter-1 .responder-person, .firefighter-1 .responder-person-head { stroke: #008f92; }
 .firefighter-1 .trajectory-line, .firefighter-1 .uncertainty-ellipse { stroke: #008f92; }
 .firefighter-1 .firefighter-label { fill: #008f92; }
+
+.posture-alert {
+  margin: 0 0 0.6rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 4px;
+  border-left: 3px solid #d83a2e;
+  background: rgba(216, 58, 46, 0.14);
+  color: #ffb3ac;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.posture-value-alert {
+  color: #ff8a7e;
+  font-weight: 600;
+}

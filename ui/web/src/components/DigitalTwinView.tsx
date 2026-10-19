@@ -116,10 +116,21 @@ function updateAvatar(parts: AvatarParts, state: EstimatedState | null, elapsedS
   }
 
   root.visible = true;
-  root.position.set(state.position_m.x, 0, -state.position_m.y);
-  root.rotation.y = -headingFromQuaternion(state.orientation_xyzw);
 
-  const walking = state.activity.motion === "walking";
+  const lying = state.activity.posture === "lying_down";
+  const headingRad = -headingFromQuaternion(state.orientation_xyzw);
+
+  // A prone responder keeps their heading but the body axis tips onto the
+  // floor, so compose the tip after the heading instead of overwriting it.
+  root.position.set(state.position_m.x, lying ? 0.22 : 0, -state.position_m.y);
+  root.quaternion.setFromEuler(new THREE.Euler(0, headingRad, 0));
+  if (lying) {
+    root.quaternion.multiply(
+      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2),
+    );
+  }
+
+  const walking = state.activity.motion === "walking" && !lying;
   const crouching = state.activity.posture === "crouching";
   const gait = walking ? Math.sin(elapsedS * 8.5) : 0;
   const crouchDrop = crouching ? 0.34 : 0;
@@ -193,7 +204,8 @@ function runCanvasFallback(
 
   function drawAvatar(state: EstimatedState, elapsedS: number, color = "#d83a2e") {
     const point = project(state.position_m.x, state.position_m.y);
-    const walking = state.activity.motion === "walking";
+    const lying = state.activity.posture === "lying_down";
+    const walking = state.activity.motion === "walking" && !lying;
     const crouching = state.activity.posture === "crouching";
     const gait = walking ? Math.sin(elapsedS * 8.5) : 0;
     const bodyHeight = crouching ? 42 : 68;
@@ -202,6 +214,11 @@ function runCanvasFallback(
     context.save();
     context.translate(point.x, point.y);
     context.rotate(-headingFromQuaternion(state.orientation_xyzw) * 0.35);
+    if (lying) {
+      // Tip the whole figure onto its side and drop it to floor level.
+      context.rotate(Math.PI / 2);
+      context.translate(0, 34);
+    }
     context.lineCap = "round";
     context.lineJoin = "round";
 
@@ -675,7 +692,9 @@ export function DigitalTwinView({
         <h2>Digital Twin</h2>
         <span className="twin-activity">
           {firefighters ? `${firefighters.length} firefighters · simulation` : state
-            ? `${state.activity.posture} ${state.activity.motion}`
+            ? state.activity.posture === "lying_down"
+              ? `LYING DOWN · ${state.activity.motion}`
+              : `${state.activity.posture} ${state.activity.motion}`
             : liveUwb?.tag_present
               ? `tag detected · ${usableAnchorCount}/3 mapped anchors`
               : "waiting for tag"}

@@ -27,7 +27,7 @@ export type EstimatedState = {
     active_anchor_count: number;
   };
   activity: {
-    posture: "standing" | "crouching";
+    posture: "standing" | "crouching" | "lying_down";
     motion: "stationary" | "walking";
     confidence: number;
   };

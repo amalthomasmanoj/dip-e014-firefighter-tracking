@@ -170,6 +170,32 @@ Open http://localhost:5173. Watch the heading readout and heading line turn
 during the `turn` segment, the digital twin crouch, and the prone alert
 appear when the scenario reaches `lying_down`.
 
+### Windows PowerShell
+
+PowerShell has no inline `VAR=value command` prefix; that form is a
+`CommandNotFoundException`. Set each variable on its own line first, and use
+`;` rather than `&&` to chain (Windows PowerShell 5.1 has no pipeline chain
+operators).
+
+```powershell
+# 1 backend, with your plugins
+cd C:\path\to\dip-e014-firefighter-tracking
+$env:E014_SOURCE = "udp"
+$env:E014_ANCHORS_CONFIG = "backend/config/anchors.local.yaml"
+$env:E014_ACTIVITY_CLASSIFIER = "my_package.posture:MyPosture"
+.venv\Scripts\python.exe -m uvicorn backend.api.app:app --host 0.0.0.0 --port 8000
+
+# 2 UI
+cd ui\web; npm run dev
+
+# 3 scripted IMU over UDP
+.venv\Scripts\python.exe -m tools.fake_data.imu_scenario --scenario full --udp --realtime --loop
+```
+
+`$env:` variables persist for the lifetime of that terminal. Clear one with
+`$env:E014_SOURCE = $null` before restarting the backend in a different
+mode, or it silently keeps the old setting.
+
 IMU-only packets hold the last known position, so the responder will not move
 across the map without UWB. That is expected; posture and heading still work.
 

@@ -21,3 +21,6 @@ build/
 data/raw/
 experiments/results/*
 !experiments/results/.gitkeep
+
+# firmware credentials - commit config_example.h only
+firmware/**/config.h

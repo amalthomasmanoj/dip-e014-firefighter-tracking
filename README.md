@@ -149,6 +149,14 @@ python -m tools.fake_data.imu_scenario --scenario full --udp --realtime --loop
 See [docs/imu_heading_posture_integration.md](docs/imu_heading_posture_integration.md)
 for the interfaces, the test path, and the IMU wiring/firmware steps.
 
+## Firmware
+
+Lab bring-up firmware for the ESP32 + DWM3000 tag and anchors lives in
+[firmware/lab_bringup/](firmware/lab_bringup/README.md), together with the
+wiring map, the verified sweep wire format, and the bring-up order. The tag
+ships with synthetic ranging so the Wi-Fi, adapter, backend, and UI path can
+be proven before the radio works.
+
 ## Architecture
 
 Start with [docs/architecture.md](docs/architecture.md), [docs/coordinate_frames.md](docs/coordinate_frames.md), and [contracts/README.md](contracts/README.md).

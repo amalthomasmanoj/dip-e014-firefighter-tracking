@@ -18,6 +18,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+heart-rate = ["bleak>=1.0,<4"]
 dev = [
   "pytest",
   "jsonschema",

@@ -10,6 +10,7 @@ import { BuildingMap } from "./components/BuildingMap/BuildingMap";
 import { DigitalTwinView } from "./components/DigitalTwinView";
 import { ExperimentPlot } from "./components/ExperimentPlot";
 import { SensorStatus } from "./components/SensorStatus";
+import { HeartRatePanel } from "./components/HeartRatePanel";
 import { StatePanel } from "./components/StatePanel";
 import { appendSimulationTracks, fetchSimulation, FirefighterTrack, SimulationSnapshot } from "./api/simulation";
 import { SimulationControls } from "./components/SimulationControls";
@@ -221,6 +222,7 @@ export default function App() {
               </select>
             </section>
           </> : null}
+          <HeartRatePanel />
           <StatePanel state={visualizedState} />
           <SensorStatus
             state={visualizedState}

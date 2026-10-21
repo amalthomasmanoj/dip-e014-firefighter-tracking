@@ -355,3 +355,10 @@ dd {
 .firefighter-1 .responder-person, .firefighter-1 .responder-person-head { stroke: #008f92; }
 .firefighter-1 .trajectory-line, .firefighter-1 .uncertainty-ellipse { stroke: #008f92; }
 .firefighter-1 .firefighter-label { fill: #008f92; }
+
+.heart-rate-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.heart-rate-heading h2 { margin: 0; }
+.heart-rate-heading .status-pill { font-size: 10px; text-align: center; }
+.heart-rate-value { color: #b82c39; font-size: 44px; font-weight: 700; margin: 14px 0 4px; font-variant-numeric: tabular-nums; }
+.heart-rate-value span { color: #627083; font-size: 14px; font-weight: 400; }
+.heart-rate-caption { color: #627083; font-size: 12px; line-height: 1.5; margin: 4px 0 0; overflow-wrap: anywhere; }

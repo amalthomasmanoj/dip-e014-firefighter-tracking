@@ -129,6 +129,7 @@ npm test
 npm run build
 ```
 
+
 ## IMU Heading and Posture
 
 Heading ("direction") and posture (`standing` / `crouching` / `lying_down`)
@@ -156,6 +157,10 @@ Lab bring-up firmware for the ESP32 + DWM3000 tag and anchors lives in
 wiring map, the verified sweep wire format, and the bring-up order. The tag
 ships with synthetic ranging so the Wi-Fi, adapter, backend, and UI path can
 be proven before the radio works.
+## Live heart rate (COOSPO H808S)
+
+Display real Bluetooth heart rate independently of localization, including while
+the map runs in simulation. See [MacBook setup](docs/heart_rate.md).
 
 ## Architecture
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import AsyncIterator, Callable
 
@@ -7,6 +8,8 @@ from backend.ingestion.events import IngestedMeasurement
 from backend.ingestion.parser import parse_packet
 from backend.ingestion.sequencing import SequenceTracker
 from backend.ingestion.udp_receiver import receive_udp_packets
+
+logger = logging.getLogger(__name__)
 
 
 def ingest_datagram(
@@ -29,13 +32,32 @@ async def ingest_datagrams(
     tracker: SequenceTracker | None = None,
     clock: Callable[[], float] = time.monotonic,
 ) -> AsyncIterator[IngestedMeasurement]:
+    """Yield parsed measurements, dropping datagrams that do not parse.
+
+    One malformed packet must never end the stream: during bring-up the
+    firmware is changing under us, and a dead ingest task looks exactly like
+    a dead radio from the UI.
+    """
     active_tracker = tracker or SequenceTracker()
+    rejected = 0
     async for payload in payloads:
-        yield ingest_datagram(
-            payload=payload,
-            tracker=active_tracker,
-            arrival_time_s=clock(),
-        )
+        try:
+            event = ingest_datagram(
+                payload=payload,
+                tracker=active_tracker,
+                arrival_time_s=clock(),
+            )
+        except (ValueError, UnicodeDecodeError) as exc:
+            rejected += 1
+            if rejected <= 5 or rejected % 100 == 0:
+                logger.warning(
+                    "rejected datagram #%d: %s; payload=%.200r",
+                    rejected,
+                    exc,
+                    payload,
+                )
+            continue
+        yield event
 
 
 async def udp_measurement_events(

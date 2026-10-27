@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from collections.abc import AsyncIterator
 from contextlib import suppress
 
@@ -15,6 +16,8 @@ from backend.ingestion.pipeline import udp_measurement_events
 from backend.models.state import websocket_message
 from backend.uwb.anchors import DEFAULT_ANCHORS, Anchor
 from backend.uwb.live_ranges import LiveUwbRangeTracker
+
+logger = logging.getLogger(__name__)
 
 
 class LiveUdpStateHub:
@@ -50,7 +53,12 @@ class LiveUdpStateHub:
 
     async def _run(self) -> None:
         async for event in udp_measurement_events():
-            self.process(event)
+            # One bad sample must not end the stream: a dead ingest task is
+            # indistinguishable from a dead radio in the UI.
+            try:
+                self.process(event)
+            except Exception:
+                logger.exception("live state update failed for %r", event.measurement)
 
     async def start(self) -> None:
         if self._task is None or self._task.done():

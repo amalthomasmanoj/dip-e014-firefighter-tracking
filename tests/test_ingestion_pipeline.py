@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 
 import pytest
 
-from backend.ingestion.pipeline import ingest_datagram
+from backend.ingestion.pipeline import ingest_datagram, ingest_datagrams
 from backend.ingestion.sequencing import SequenceTracker
 from backend.models.measurements import ImuMeasurement, UwbRangeMeasurement
 
@@ -95,3 +96,38 @@ def test_original_timestamp_is_preserved_separately_from_arrival_time() -> None:
 
     assert event.measurement.timestamp_us == 123456789
     assert event.arrival_time_s == 987.654
+
+
+async def _payload_stream(payloads: list[bytes]):
+    for payload in payloads:
+        yield payload
+
+
+async def _collect(payloads: list[bytes]) -> list:
+    return [event async for event in ingest_datagrams(_payload_stream(payloads))]
+
+
+def test_malformed_datagram_is_skipped_without_ending_the_stream() -> None:
+    good = encode_packet(load_example("imu_packet.json"))
+    later = encode_packet(dict(load_example("imu_packet.json"), sequence_number=1002))
+
+    events = asyncio.run(_collect([good, b"DIP_PING 69ce316f0dc8a1f2", later]))
+
+    assert [event.measurement.sequence_number for event in events] == [1001, 1002]
+
+
+def test_unknown_packet_type_is_skipped_without_ending_the_stream() -> None:
+    good = encode_packet(load_example("uwb_range_packet.json"))
+    unknown = encode_packet(dict(load_example("imu_packet.json"), type="uwb"))
+
+    events = asyncio.run(_collect([unknown, good]))
+
+    assert [event.measurement.anchor_id for event in events] == ["A1"]
+
+
+def test_non_utf8_datagram_is_skipped_without_ending_the_stream() -> None:
+    good = encode_packet(load_example("imu_packet.json"))
+
+    events = asyncio.run(_collect([b"\xff\xfe\x00binary", good]))
+
+    assert len(events) == 1

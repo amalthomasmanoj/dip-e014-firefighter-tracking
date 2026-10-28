@@ -90,3 +90,13 @@ def test_heading_alignment_targets_only_requested_responder() -> None:
     assert first is not None and second is not None
     assert heading(first) == pytest.approx(math.pi / 2)
     assert heading(second) == pytest.approx(0.0)
+
+
+def test_live_hub_resolves_logical_responder_to_physical_uwb_node() -> None:
+    hub = LiveUdpStateHub(
+        LiveUwbRangeTracker(),
+        responders=(ResponderConfig("firefighter_1", "dwm3000_tag_10", "waist_1"),),
+    )
+
+    assert hub.uwb_node_id("firefighter_1") == "dwm3000_tag_10"
+    assert hub.uwb_node_id("unconfigured_tag") == "unconfigured_tag"

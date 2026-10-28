@@ -148,9 +148,15 @@ def measurement_for_responder(
 class ResponderRegistry:
     def __init__(self, responders: Sequence[ResponderConfig] = ()) -> None:
         self._by_node: dict[str, ResponderConfig] = {}
+        self._by_responder_id: dict[str, ResponderConfig] = {}
         for responder in responders:
+            self._by_responder_id[responder.responder_id] = responder
             self._by_node[responder.uwb_node_id] = responder
             self._by_node[responder.imu_node_id] = responder
+
+    def uwb_node_id(self, responder_or_node_id: str) -> str:
+        config = self._by_responder_id.get(responder_or_node_id)
+        return config.uwb_node_id if config is not None else responder_or_node_id
 
     def resolve(self, measurement: Measurement) -> tuple[str, Measurement]:
         config = self._by_node.get(measurement.node_id)

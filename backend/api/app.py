@@ -10,8 +10,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend.api.live import LiveUdpStateHub
 from backend.api.websocket import state_messages_for_source
-from backend.config.source import SourceMode, source_mode_from_env
 from backend.config.responders import ResponderConfig, responders_from_env
+from backend.config.source import SourceMode, source_mode_from_env
 from backend.heart_rate.receiver import HeartRateReceiver
 from backend.simulation.world import SimulationWorld
 from backend.uwb.anchor_map import LiveAnchorMapTracker
@@ -126,7 +126,10 @@ def create_app(
 
     @app.get("/uwb/ranges")
     def uwb_ranges(tag_node_id: str | None = None) -> dict[str, object]:
-        return live_uwb_ranges.snapshot(node_id=tag_node_id)
+        physical_node_id = (
+            live_hub.uwb_node_id(tag_node_id) if tag_node_id is not None else None
+        )
+        return live_uwb_ranges.snapshot(node_id=physical_node_id)
 
     @app.get("/uwb/anchor-map")
     def uwb_anchor_map() -> dict[str, object]:

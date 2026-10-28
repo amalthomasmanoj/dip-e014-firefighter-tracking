@@ -14,15 +14,21 @@ Exact physical alignment is established during setup and map calibration.
 
 ## IMU / Body Frame
 
-Do not assume breakout-board silk labels automatically match the shoe frame.
+Do not assume breakout-board silk labels automatically match the waist/body frame.
 
 Each hardware setup must document:
 
 - raw sensor axes
-- mounted shoe axes
-- fixed transform from sensor to shoe/body
+- mounted waist/body axes (`+x` forward, `+y` left, `+z` up)
+- fixed right-handed transform from ICM-20948 sensor axes to body axes
 
 Never silently swap axes in code. Axis transforms belong in documented calibration/configuration paths.
+
+Live deployments provide the transform through `E014_RESPONDERS_CONFIG`. The
+heading estimator consumes body-frame `gz`; it must never integrate a raw board
+axis directly. World heading is zero along world `+x`, increases toward `+y`,
+and is aligned deliberately at session start because the current gyro-only
+baseline does not claim magnetic north.
 
 ## Units
 

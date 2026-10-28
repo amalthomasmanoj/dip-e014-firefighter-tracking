@@ -2,7 +2,9 @@
 
 ESP32 wearable/tag firmware placeholder.
 
-This may eventually read both UWB and foot-mounted IMU data, or it may coordinate with a separate shoe node. Do not hard-code the physical topology into estimator logic.
+This may read both UWB and waist-mounted ICM-20948 data, or it may coordinate
+with a separate waist node. Do not hard-code the physical topology into
+estimator logic; associate physical node IDs through the responder config.
 
 The supplied tag-v3 sketch is compatible with the laptop adapter. It:
 

@@ -10,6 +10,19 @@ start -> straight segment -> 90-degree turn -> second straight segment -> stop
 
 The sensor packet generator is a contract and integration tool. It is not a physics-grade inertial simulator.
 
+`imu_scenario.py` generates contract-valid IMU packets for posed body
+attitudes, so heading and posture code can be exercised without hardware. It
+can print JSON lines or stream over UDP to the live backend:
+
+```bash
+python -m tools.fake_data.imu_scenario --scenario fall
+python -m tools.fake_data.imu_scenario --scenario full --udp --realtime --loop
+```
+
+Scenarios: `standing`, `walking`, `crouching`, `lying_down`, `turn`, `fall`,
+`full`. The accelerations are posed attitudes plus light noise, not a physics
+simulation; they prove the pipeline and classifier bands, not sensor realism.
+
 Examples:
 
 ```bash

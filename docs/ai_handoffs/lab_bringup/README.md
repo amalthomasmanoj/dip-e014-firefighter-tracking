@@ -1,5 +1,10 @@
 # Lab Bring-Up AI Handoffs
 
+> Historical note: decision 0002 supersedes the former final-hardware boundary.
+> The project target is now a waist-mounted ICM-20948. These handoffs remain
+> unchanged as records of the earlier borrowed-hardware plan; use current
+> hardware setup and coordinate-frame documentation for new work.
+
 These handoff docs are meant to be copied into separate AI coding sessions. Each file is scoped to one ticket so teammates can work independently without confusing borrowed lab hardware with the final project hardware.
 
 ## Current Hardware Context

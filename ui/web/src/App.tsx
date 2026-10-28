@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchAnchors } from "./api/anchors";
 import {
   backendSourceFromHealth,
+  alignResponderHeading,
   fetchBackendHealth,
   fetchLiveAnchorMap,
   fetchLiveUwbRanges,
@@ -227,7 +228,7 @@ export default function App() {
       <header className="app-header">
         <div>
           <h1>E014 Firefighter Tracking</h1>
-          <p>UWB + foot IMU/ZUPT indoor trajectory estimation</p>
+          <p>UWB position + waist IMU direction and lying posture</p>
         </div>
         <span className={displayConnected ? "status-pill live" : "status-pill"}>{displayConnected ? source === "simulation" ? "SIMULATION" : "LIVE" : "OFFLINE"}</span>
       </header>
@@ -284,7 +285,12 @@ export default function App() {
               </select>
             </section>
           ) : null}
-          <StatePanel state={visualizedState} />
+          <StatePanel
+            state={visualizedState}
+            onAlignHeading={source === "live" && selectedTrack
+              ? () => alignResponderHeading(selectedTrack.node_id, 0)
+              : undefined}
+          />
           <SensorStatus
             state={visualizedState}
             connected={displayConnected}

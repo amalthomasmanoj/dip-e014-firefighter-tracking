@@ -28,7 +28,7 @@ export type SimulationSnapshot = {
 export type SimulationCommand = {
   kind: "firefighter" | "anchor";
   node_id: string;
-  action?: "move" | "toggle_crouch";
+  action?: "move" | "toggle_lying";
   dx_m?: number;
   dy_m?: number;
 };

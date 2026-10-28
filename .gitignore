@@ -8,6 +8,8 @@ __pycache__/
 .env
 .env.*
 backend/config/anchors.local.yaml
+backend/config/responders.local.yaml
+firmware/**/config.h
 node_modules/
 dist/
 build/

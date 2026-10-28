@@ -5,10 +5,10 @@ The system tracks a firefighter indoors using a wearable sensing system and lapt
 ```text
 UWB anchors
     -> firefighter UWB tag
-    -> foot-mounted IMU
+    -> waist-mounted ICM-20948 IMU
     -> ESP32 packet transport
     -> Python ingestion
-    -> IMU/ZUPT + UWB processing
+    -> waist heading/posture + UWB processing
     -> EKF / ESKF fusion
     -> EstimatedState
     -> logging / replay
@@ -33,7 +33,7 @@ Firmware does not run the production estimator in the baseline.
 - Parse and validate packets.
 - Preserve original measurement timestamps.
 - Detect sequence gaps and out-of-order packets.
-- Calibrate IMU and detect ZUPT events.
+- Apply the configured sensor-to-body transform, calibrate gyro bias, and estimate relative heading/posture.
 - Process UWB ranges with known anchors.
 - Run fusion.
 - Publish `EstimatedState`.

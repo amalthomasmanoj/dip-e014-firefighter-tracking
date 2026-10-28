@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from backend.api.live import LiveUdpStateHub
 from backend.api.websocket import state_messages_for_source
 from backend.config.source import SourceMode, source_mode_from_env
+from backend.config.responders import ResponderConfig, responders_from_env
 from backend.simulation.world import SimulationWorld
 from backend.uwb.anchors import Anchor, anchors_from_env
 from backend.uwb.live_ranges import LiveUwbRangeTracker
@@ -20,19 +21,32 @@ class SimulationCommand(BaseModel):
     model_config = ConfigDict(extra="forbid")
     kind: Literal["firefighter", "anchor"]
     node_id: str
-    action: Literal["move", "toggle_crouch"] = "move"
+    action: Literal["move", "toggle_lying"] = "move"
     dx_m: float = Field(default=0.0, ge=-0.2, le=0.2, allow_inf_nan=False)
     dy_m: float = Field(default=0.0, ge=-0.2, le=0.2, allow_inf_nan=False)
+
+
+class HeadingAlignment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    heading_rad: float = Field(allow_inf_nan=False)
 
 
 def create_app(
     source_mode: SourceMode | None = None,
     anchors: Sequence[Anchor] | None = None,
+    responders: Sequence[ResponderConfig] | None = None,
 ) -> FastAPI:
     active_source_mode = source_mode or source_mode_from_env()
     configured_anchors = tuple(anchors) if anchors is not None else anchors_from_env()
     live_uwb_ranges = LiveUwbRangeTracker()
-    live_hub = LiveUdpStateHub(live_uwb_ranges, configured_anchors)
+    configured_responders = (
+        tuple(responders) if responders is not None else responders_from_env()
+    )
+    live_hub = LiveUdpStateHub(
+        live_uwb_ranges,
+        configured_anchors,
+        configured_responders,
+    )
     simulation = (
         SimulationWorld(configured_anchors) if active_source_mode is SourceMode.SIMULATION else None
     )
@@ -86,10 +100,10 @@ def create_app(
         if simulation is None:
             raise HTTPException(409, "simulation controls require E014_SOURCE=simulation")
         try:
-            if command.action == "toggle_crouch":
+            if command.action == "toggle_lying":
                 if command.kind != "firefighter":
-                    raise ValueError("only firefighters can crouch")
-                simulation.toggle_crouch(command.node_id)
+                    raise ValueError("only firefighters can change lying posture")
+                simulation.toggle_lying(command.node_id)
             else:
                 simulation.move(command.kind, command.node_id, command.dx_m, command.dy_m)
         except KeyError as exc:
@@ -101,6 +115,16 @@ def create_app(
     @app.get("/uwb/ranges")
     def uwb_ranges() -> dict[str, object]:
         return live_uwb_ranges.snapshot()
+
+    @app.post("/responders/{responder_id}/heading-alignment")
+    def align_heading(responder_id: str, alignment: HeadingAlignment) -> dict[str, object]:
+        try:
+            live_hub.align_heading(responder_id, alignment.heading_rad)
+        except KeyError as exc:
+            raise HTTPException(404, "responder has not produced a measurement") from exc
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        return {"accepted": True, "responder_id": responder_id, "heading_rad": alignment.heading_rad}
 
     @app.websocket("/ws/state")
     async def state_websocket(websocket: WebSocket) -> None:

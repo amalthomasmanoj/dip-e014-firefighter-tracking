@@ -4,7 +4,10 @@ These rules apply to the entire repository.
 
 ## Project Scope
 
-Build a wearable indoor firefighter tracking system using UWB, foot-mounted IMU, ZUPT, and laptop-side EKF/ESKF fusion.
+Build a wearable indoor firefighter tracking system using UWB, a waist-mounted
+ICM-20948 IMU, and laptop-side EKF/ESKF fusion. UWB is authoritative for
+position in the current baseline; the waist IMU supplies relative heading and
+posture until inertial propagation is separately calibrated and validated.
 
 Do not introduce baseline scope for path planning, robots, SLAM, LiDAR, visual-inertial odometry, victim detection, route guidance, or unknown-building mapping. Those belong only in future-work discussions unless a human explicitly changes project scope.
 
@@ -84,7 +87,7 @@ Do not invent hardware capabilities.
 
 Do not assume the DWM3000 setup exposes signal quality, NLOS diagnostics, anchor-to-anchor ranging, dynamic role switching, or a specific update rate unless confirmed by hardware documentation or tests.
 
-Do not hard-code whether the foot IMU shares the UWB tag ESP32 or uses a separate wearable node.
+Do not hard-code whether the waist IMU shares the UWB tag ESP32 or uses a separate wearable node.
 
 Treat barometer support as optional future work until hardware scope confirms it.
 

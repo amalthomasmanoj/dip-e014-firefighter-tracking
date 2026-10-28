@@ -10,13 +10,13 @@ export function SimulationControls({ snapshot, online }: Props) {
   const separator = target.indexOf(":");
   const kind = target.slice(0, separator) as "firefighter" | "anchor";
   const nodeId = target.slice(separator + 1);
-  const command = useCallback(async (dx = 0, dy = 0, crouch = false) => {
+  const command = useCallback(async (dx = 0, dy = 0, lying = false) => {
     if (!online || pending.current) return;
     pending.current = true;
     try {
       await sendSimulationCommand({
         kind, node_id: nodeId, dx_m: dx, dy_m: dy,
-        action: crouch ? "toggle_crouch" : "move",
+        action: lying ? "toggle_lying" : "move",
       });
       setError(null);
     } catch (failure) {
@@ -41,7 +41,7 @@ export function SimulationControls({ snapshot, online }: Props) {
       if (delta) {
         event.preventDefault();
         void command(...delta);
-      } else if (event.key.toLowerCase() === "c" && kind === "firefighter" && !event.repeat) {
+      } else if (event.key.toLowerCase() === "l" && kind === "firefighter" && !event.repeat) {
         event.preventDefault();
         void command(0, 0, true);
       }
@@ -66,7 +66,7 @@ export function SimulationControls({ snapshot, online }: Props) {
       <button disabled={!online} onClick={() => void command(0, -0.2)} aria-label="Move down">↓</button>
       <button disabled={!online} onClick={() => void command(0.2, 0)} aria-label="Move right">→</button>
     </div>
-    {kind === "firefighter" ? <button disabled={!online} onClick={() => void command(0, 0, true)}>Toggle crouch (C)</button> : null}
+    {kind === "firefighter" ? <button disabled={!online} onClick={() => void command(0, 0, true)}>Toggle lying posture (L)</button> : null}
     <p>Arrow keys / numpad move the selected node by 0.2 m. Click the map to leave the selector, then use keys.</p>
     <p className="simulation-note">Simulated pair exchanges at 10 Hz. Coordinates stay in a fixed world frame; hardware support is unconfirmed.</p>
     {!online ? <p role="status">Simulation disconnected — controls paused.</p> : null}

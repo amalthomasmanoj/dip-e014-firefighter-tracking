@@ -355,3 +355,38 @@ dd {
 .firefighter-1 .responder-person, .firefighter-1 .responder-person-head { stroke: #008f92; }
 .firefighter-1 .trajectory-line, .firefighter-1 .uncertainty-ellipse { stroke: #008f92; }
 .firefighter-1 .firefighter-label { fill: #008f92; }
+
+.posture-alert {
+  margin: 0 0 0.6rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 4px;
+  border-left: 3px solid #d83a2e;
+  background: rgba(216, 58, 46, 0.14);
+  color: #ffb3ac;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.posture-value-alert {
+  color: #ff8a7e;
+  font-weight: 600;
+}
+
+.heading-alignment {
+  margin-top: 0.8rem;
+}
+
+.heading-alignment button {
+  width: 100%;
+  border: 1px solid #3974a8;
+  border-radius: 5px;
+  padding: 0.55rem;
+  background: rgba(57, 116, 168, 0.12);
+  color: inherit;
+  cursor: pointer;
+}
+
+.heading-alignment p {
+  margin: 0.45rem 0 0;
+  font-size: 0.75rem;
+}

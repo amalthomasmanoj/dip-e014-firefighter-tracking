@@ -27,7 +27,7 @@ export type EstimatedState = {
     active_anchor_count: number;
   };
   activity: {
-    posture: "standing" | "crouching";
+    posture: "standing" | "crouching" | "lying_down";
     motion: "stationary" | "walking";
     confidence: number;
   };
@@ -36,6 +36,7 @@ export type EstimatedState = {
 export type StateMessage = {
   type: "estimated_state";
   source: "simulation" | "live" | "replay";
+  node_id?: string;
   state: EstimatedState;
 };
 

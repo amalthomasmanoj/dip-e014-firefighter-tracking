@@ -1,0 +1,10 @@
+responders:
+  - responder_id: firefighter_1
+    uwb_node_id: dwm3000_tag_10
+    imu_node_id: wearable_01
+    # Replace this identity matrix with the measured ICM-20948 sensor-to-waist
+    # body rotation. Rows map sensor-frame vectors into body-frame x/y/z.
+    imu_sensor_to_body:
+      - [1, 0, 0]
+      - [0, 1, 0]
+      - [0, 0, 1]

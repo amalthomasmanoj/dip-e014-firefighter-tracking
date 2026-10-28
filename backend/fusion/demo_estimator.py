@@ -6,8 +6,12 @@ from collections import deque
 from collections.abc import Sequence
 
 from backend.fusion.position_ekf import PositionEkf2D
-from backend.imu.activity import classify_activity
-from backend.imu.zupt_detector import detect_zupt_window
+from backend.imu.activity import ActivityClassifier, TiltActivityClassifier
+from backend.imu.heading import (
+    GyroYawIntegrator,
+    HeadingEstimator,
+    heading_to_quaternion_xyzw,
+)
 from backend.models.measurements import ImuMeasurement, Measurement, UwbRangeMeasurement
 from backend.models.state import (
     ActivityState,
@@ -36,6 +40,8 @@ class DemoSensorEstimator:
         range_sync_tolerance_us: int = 10_000,
         range_median_window: int = 5,
         emit_imu_only_state: bool = True,
+        heading_estimator: HeadingEstimator | None = None,
+        activity_classifier: ActivityClassifier | None = None,
     ) -> None:
         if range_sync_tolerance_us < 0:
             raise ValueError("range sync tolerance cannot be negative")
@@ -54,6 +60,10 @@ class DemoSensorEstimator:
         self._last_imu_timestamp_us: int | None = None
         self._last_position: tuple[float, float] | None = None
         self._last_position_timestamp_us: int | None = None
+        self._heading_estimator: HeadingEstimator = heading_estimator or GyroYawIntegrator()
+        self._activity_classifier: ActivityClassifier = (
+            activity_classifier or TiltActivityClassifier()
+        )
         self._yaw_rad = 0.0
         self._uncertainty_m = 1.5
         self._range_median_window = range_median_window
@@ -84,10 +94,7 @@ class DemoSensorEstimator:
         return None
 
     def _observe_imu(self, measurement: ImuMeasurement) -> None:
-        if self._last_imu_timestamp_us is not None:
-            dt_s = (measurement.timestamp_us - self._last_imu_timestamp_us) / 1_000_000
-            if dt_s > 0:
-                self._yaw_rad += measurement.gz_radps * dt_s
+        self._yaw_rad = self._heading_estimator.update(measurement)
         self._last_imu_timestamp_us = measurement.timestamp_us
         self._latest_imu = measurement
         self._imu_window.append(measurement)
@@ -179,6 +186,13 @@ class DemoSensorEstimator:
             sigma_y_m=sigma_y_m,
         )
 
+    def align_heading(self, heading_rad: float) -> None:
+        align = getattr(self._heading_estimator, "align", None)
+        if align is None:
+            raise ValueError("configured heading estimator does not support alignment")
+        align(heading_rad)
+        self._yaw_rad = heading_rad
+
     def _build_state(
         self,
         *,
@@ -192,21 +206,20 @@ class DemoSensorEstimator:
         sigma_x_m: float,
         sigma_y_m: float,
     ) -> EstimatedState:
-        zupt_active = detect_zupt_window(self._imu_window) if self._imu_window else False
-        activity = self._activity_state(speed_mps=speed_mps, zupt_active=zupt_active)
+        activity = self._activity_state(speed_mps=speed_mps, zupt_active=False)
 
         return EstimatedState(
             timestamp_us=timestamp_us,
             position_m=Vector3(x=x_m, y=y_m, z=0.0),
             velocity_mps=Vector3(x=velocity_x_mps, y=velocity_y_mps, z=0.0),
-            orientation_xyzw=self._heading_to_quaternion(self._yaw_rad),
+            orientation_xyzw=self._heading_quaternion(),
             uncertainty=Uncertainty(
                 sigma_x_m=sigma_x_m,
                 sigma_y_m=sigma_y_m,
                 sigma_z_m=1.0,
             ),
             status=SensorStatus(
-                zupt_active=zupt_active,
+                zupt_active=False,
                 uwb_available=bool(fresh_ranges),
                 active_anchor_count=len(fresh_ranges),
             ),
@@ -252,7 +265,7 @@ class DemoSensorEstimator:
                 confidence=0.0,
             )
 
-        activity = classify_activity(
+        activity = self._activity_classifier.classify(
             sample=self._latest_imu,
             speed_mps=speed_mps,
             zupt_active=zupt_active,
@@ -278,7 +291,6 @@ class DemoSensorEstimator:
             return 1.0
         return sum(residuals) / len(residuals)
 
-    @staticmethod
-    def _heading_to_quaternion(yaw_rad: float) -> Quaternion:
-        half = yaw_rad / 2.0
-        return Quaternion(x=0.0, y=0.0, z=math.sin(half), w=math.cos(half))
+    def _heading_quaternion(self) -> Quaternion:
+        x, y, z, w = heading_to_quaternion_xyzw(self._yaw_rad)
+        return Quaternion(x=x, y=y, z=z, w=w)

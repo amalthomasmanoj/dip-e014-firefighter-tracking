@@ -21,3 +21,20 @@ export async function fetchLiveUwbRanges(): Promise<LiveUwbSnapshot> {
   }
   return response.json() as Promise<LiveUwbSnapshot>;
 }
+
+export async function alignResponderHeading(
+  responderId: string,
+  headingRad = 0,
+): Promise<void> {
+  const response = await fetch(
+    `${baseUrl}/responders/${encodeURIComponent(responderId)}/heading-alignment`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ heading_rad: headingRad }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`failed to align heading: ${response.status}`);
+  }
+}

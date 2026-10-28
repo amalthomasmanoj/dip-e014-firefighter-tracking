@@ -22,8 +22,8 @@ including the canvas fallback when WebGL is unavailable.
 - Use the direction buttons, arrow keys, or numpad 8/2/4/6 to move that node
   in 0.2 metre increments. Keyboard input is ignored while a form control has
   focus; click the map before using arrow keys.
-- For a firefighter, use **Toggle crouch** or `C` to change the synthetic IMU
-  posture input.
+- For a firefighter, use **Toggle lying posture** or `L` to hold the synthetic
+  waist IMU horizontally. The two-second dwell still applies.
 - Use **Inspect firefighter** to select the state, sensor summary, and experiment
   trail statistics shown in the sidebar.
 - Restart the simulation backend to reset the scene. Browser tabs share one
@@ -96,7 +96,7 @@ document, or logging channels change in this implementation.
 ```
 
 ```json
-{"kind":"firefighter","node_id":"sim_tag_11","action":"toggle_crouch"}
+{"kind":"firefighter","node_id":"sim_tag_11","action":"toggle_lying"}
 ```
 
 Movement values must be finite and at most 0.2 metres per axis per request.

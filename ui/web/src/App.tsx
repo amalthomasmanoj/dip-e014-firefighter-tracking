@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { fetchAnchors } from "./api/anchors";
 import {
   backendSourceFromHealth,
+  alignResponderHeading,
   fetchBackendHealth,
   fetchLiveUwbRanges,
 } from "./api/backend";
@@ -46,6 +47,7 @@ export default function App() {
   const [selectedTag, setSelectedTag] = useState("sim_tag_10");
   const [source, setSource] = useState<BackendSource | null>(null);
   const [liveUwb, setLiveUwb] = useState<LiveUwbSnapshot>(emptyLiveUwbSnapshot);
+  const [liveResponderId, setLiveResponderId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchAnchors()
@@ -87,6 +89,7 @@ export default function App() {
     const handleMessage = (message: StateMessage) => {
       setSource(message.source);
       if (message.source === "live") {
+        if (message.node_id) setLiveResponderId(message.node_id);
         setTrajectory((previous) => [...previous.slice(-180), message.state]);
       }
     };
@@ -186,7 +189,7 @@ export default function App() {
       <header className="app-header">
         <div>
           <h1>E014 Firefighter Tracking</h1>
-          <p>UWB + foot IMU/ZUPT indoor trajectory estimation</p>
+          <p>UWB position + waist IMU direction and lying posture</p>
         </div>
         <span className={displayConnected ? "status-pill live" : "status-pill"}>{displayConnected ? source === "simulation" ? "SIMULATION" : "LIVE" : "OFFLINE"}</span>
       </header>
@@ -221,7 +224,12 @@ export default function App() {
               </select>
             </section>
           </> : null}
-          <StatePanel state={visualizedState} />
+          <StatePanel
+            state={visualizedState}
+            onAlignHeading={source === "live" && liveResponderId
+              ? () => alignResponderHeading(liveResponderId, 0)
+              : undefined}
+          />
           <SensorStatus
             state={visualizedState}
             connected={displayConnected}

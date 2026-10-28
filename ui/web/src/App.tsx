@@ -5,10 +5,16 @@ import {
   alignResponderHeading,
   fetchBackendHealth,
   fetchLiveAnchorMap,
+  fetchLiveSensorStatus,
   fetchLiveUwbRanges,
 } from "./api/backend";
 import { connectStateStream } from "./api/websocket";
-import { appendLiveTrack, detectedLiveAnchors } from "./api/live";
+import {
+  appendLiveTrack,
+  detectedLiveAnchors,
+  LiveFirefighterTrack,
+  pruneStaleLiveTracks,
+} from "./api/live";
 import { BuildingMap } from "./components/BuildingMap/BuildingMap";
 import { DigitalTwinView } from "./components/DigitalTwinView";
 import { ExperimentPlot } from "./components/ExperimentPlot";
@@ -22,14 +28,9 @@ import {
   BackendSource,
   LiveUwbSnapshot,
   LiveAnchorMapSnapshot,
+  LiveSensorStatus,
   StateMessage,
 } from "./types/state";
-
-const fallbackAnchors: Anchor[] = [
-  { anchor_id: "A1", x_m: 0, y_m: 0, z_m: 0 },
-  { anchor_id: "A2", x_m: 8, y_m: 0, z_m: 0 },
-  { anchor_id: "A3", x_m: 0, y_m: 6, z_m: 0 },
-];
 
 const emptyLiveUwbSnapshot: LiveUwbSnapshot = {
   source: "live",
@@ -46,30 +47,39 @@ const emptyLiveAnchorMap: LiveAnchorMapSnapshot = {
   map_version: 0,
   frame: "A1_origin_A2_positive_x",
   reference_anchor_ids: ["A1", "A2", "A3"],
-  anchors: fallbackAnchors,
+  anchors: [],
   links: [],
   last_error: null,
 };
 
 export default function App() {
-  const [anchors, setAnchors] = useState<Anchor[]>(fallbackAnchors);
+  const [anchors, setAnchors] = useState<Anchor[]>([]);
   const [connected, setConnected] = useState(false);
   const [simulation, setSimulation] = useState<SimulationSnapshot | null>(null);
   const [tracks, setTracks] = useState<FirefighterTrack[]>([]);
-  const [liveTracks, setLiveTracks] = useState<FirefighterTrack[]>([]);
+  const [liveTracks, setLiveTracks] = useState<LiveFirefighterTrack[]>([]);
   const [simulationOnline, setSimulationOnline] = useState(false);
   const [selectedTag, setSelectedTag] = useState("sim_tag_10");
   const [selectedLiveTag, setSelectedLiveTag] = useState("");
   const [source, setSource] = useState<BackendSource | null>(null);
   const [liveUwb, setLiveUwb] = useState<LiveUwbSnapshot>(emptyLiveUwbSnapshot);
   const [liveAnchorMap, setLiveAnchorMap] = useState<LiveAnchorMapSnapshot>(emptyLiveAnchorMap);
+  const [liveSensorStatus, setLiveSensorStatus] = useState<LiveSensorStatus | null>(null);
   const liveMapVersionRef = useRef(0);
 
   useEffect(() => {
     fetchAnchors()
       .then(setAnchors)
-      .catch(() => setAnchors(fallbackAnchors));
+      .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (source !== "live") return;
+    const interval = window.setInterval(() => {
+      setLiveTracks((previous) => pruneStaleLiveTracks(previous));
+    }, 500);
+    return () => window.clearInterval(interval);
+  }, [source]);
 
   useEffect(() => {
     if (!connected) {
@@ -137,6 +147,7 @@ export default function App() {
     if (source !== "live") {
       setLiveUwb(emptyLiveUwbSnapshot);
       setLiveAnchorMap(emptyLiveAnchorMap);
+      setLiveSensorStatus(null);
       return;
     }
 
@@ -161,6 +172,15 @@ export default function App() {
           }
         })
         .catch(() => undefined);
+      if (selectedLiveTag) {
+        fetchLiveSensorStatus(selectedLiveTag)
+          .then((snapshot) => {
+            if (!cancelled) setLiveSensorStatus(snapshot);
+          })
+          .catch(() => undefined);
+      } else {
+        setLiveSensorStatus(null);
+      }
     };
     refresh();
     const interval = window.setInterval(refresh, 250);
@@ -204,9 +224,6 @@ export default function App() {
   const activeAnchors = source === "simulation" && simulation
     ? simulation.anchors
     : source === "live" ? visibleLiveAnchors : anchors;
-  const activeTracks = source === "simulation"
-    ? tracks
-    : source === "live" ? liveTracks : undefined;
   const selectedTrack = source === "simulation"
     ? tracks.find((tag) => tag.node_id === selectedTag)
     : source === "live"
@@ -223,12 +240,27 @@ export default function App() {
     () => liveAnchorMap.links.filter((link) => link.accepted && link.age_s <= 5),
     [liveAnchorMap.links],
   );
-  const visualizedState =
-    source === "live" &&
-    (usableLiveAnchorCount < 3 ||
-      (currentState?.status.active_anchor_count ?? 0) < 3)
-      ? null
-      : currentState;
+  const livePositionResolved =
+    liveAnchorMap.map_version > 0 &&
+    anchors.length >= 3 &&
+    usableLiveAnchorCount >= 3 &&
+    (currentState?.status.active_anchor_count ?? 0) >= 3;
+  const visualizedState = source === "live" && !livePositionResolved
+    ? null
+    : currentState;
+  const resolvedLiveTracks = source === "live" && liveAnchorMap.map_version > 0
+    ? liveTracks.filter(
+      (track) => track.state !== null && track.state.status.active_anchor_count >= 3,
+    )
+    : [];
+  const activeTracks = source === "simulation"
+    ? tracks
+    : source === "live" && resolvedLiveTracks.length > 0
+      ? resolvedLiveTracks
+      : undefined;
+  const visualizedTrajectory = source === "live" && !livePositionResolved
+    ? []
+    : activeTrajectory;
 
   return (
     <main className="app-shell">
@@ -244,7 +276,7 @@ export default function App() {
           <DigitalTwinView
             anchors={activeAnchors}
             state={visualizedState}
-            trajectory={activeTrajectory}
+            trajectory={visualizedTrajectory}
             liveUwb={source === "live" ? liveUwb : null}
             usableAnchorCount={usableLiveAnchorCount}
             firefighters={activeTracks}
@@ -258,7 +290,7 @@ export default function App() {
           <BuildingMap
             anchors={activeAnchors}
             currentState={visualizedState}
-            trajectory={activeTrajectory}
+            trajectory={visualizedTrajectory}
             liveUwb={source === "live" ? liveUwb : null}
             usableAnchorCount={usableLiveAnchorCount}
             firefighters={activeTracks}
@@ -294,7 +326,8 @@ export default function App() {
             </section>
           ) : null}
           <StatePanel
-            state={visualizedState}
+            state={source === "live" ? currentState : visualizedState}
+            positionAvailable={source !== "live" || livePositionResolved}
             onAlignHeading={source === "live" && selectedTrack
               ? () => alignResponderHeading(selectedTrack.node_id, 0)
               : undefined}
@@ -305,15 +338,16 @@ export default function App() {
               : source === "live" ? selectedTrack?.node_id : undefined}
           />
           <SensorStatus
-            state={visualizedState}
+            state={source === "live" ? currentState : visualizedState}
             connected={displayConnected}
             source={source}
             liveUwb={source === "live" ? liveUwb : null}
             anchors={activeAnchors}
             usableAnchorCount={usableLiveAnchorCount}
             liveAnchorMap={source === "live" ? liveAnchorMap : null}
+            liveSensorStatus={source === "live" ? liveSensorStatus : null}
           />
-          <ExperimentPlot trajectory={activeTrajectory} />
+          <ExperimentPlot trajectory={visualizedTrajectory} />
         </aside>
       </div>
     </main>

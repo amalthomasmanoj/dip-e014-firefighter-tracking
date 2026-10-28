@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendLiveTrack, detectedLiveAnchors } from "./live";
+import { appendLiveTrack, detectedLiveAnchors, pruneStaleLiveTracks } from "./live";
 import { Anchor, EstimatedState, LiveAnchorLink, StateMessage } from "../types/state";
 
 function state(x: number): EstimatedState {
@@ -25,9 +25,9 @@ function message(nodeId: string, x: number): StateMessage {
 
 describe("live tag tracks", () => {
   it("keeps each tag's state and trajectory independent", () => {
-    let tracks = appendLiveTrack([], message("dwm3000_tag_10", 1));
-    tracks = appendLiveTrack(tracks, message("dwm3000_tag_11", 5));
-    tracks = appendLiveTrack(tracks, message("dwm3000_tag_10", 2));
+    let tracks = appendLiveTrack([], message("dwm3000_tag_10", 1), 1_000);
+    tracks = appendLiveTrack(tracks, message("dwm3000_tag_11", 5), 1_100);
+    tracks = appendLiveTrack(tracks, message("dwm3000_tag_10", 2), 1_200);
 
     expect(tracks).toHaveLength(2);
     expect(tracks.find((track) => track.node_id === "dwm3000_tag_10")?.trajectory)
@@ -36,6 +36,13 @@ describe("live tag tracks", () => {
       .toHaveLength(1);
     expect(tracks.find((track) => track.node_id === "dwm3000_tag_11")?.state?.position_m.x)
       .toBe(5);
+  });
+
+  it("expires old states instead of leaving a frozen avatar on screen", () => {
+    const tracks = appendLiveTrack([], message("dwm3000_tag_10", 1), 1_000);
+
+    expect(pruneStaleLiveTracks(tracks, 2_999)).toHaveLength(1);
+    expect(pruneStaleLiveTracks(tracks, 3_001)).toEqual([]);
   });
 });
 

@@ -131,7 +131,7 @@ function updateAvatar(parts: AvatarParts, state: EstimatedState | null, elapsedS
   parts.directionArrow.visible = true;
 
   const lying = state.activity.posture === "lying_down";
-  const headingRad = -headingFromQuaternion(state.orientation_xyzw);
+  const headingRad = headingFromQuaternion(state.orientation_xyzw);
 
   // A prone responder keeps their heading but the body axis tips onto the
   // floor, so compose the tip after the heading instead of overwriting it.
@@ -242,7 +242,7 @@ function runCanvasFallback(
     context.closePath();
     context.fill();
     context.restore();
-    context.rotate(-headingFromQuaternion(state.orientation_xyzw) * 0.35);
+    context.rotate(-headingFromQuaternion(state.orientation_xyzw));
     if (lying) {
       // Tip the whole figure onto its side and drop it to floor level.
       context.rotate(Math.PI / 2);
@@ -527,7 +527,9 @@ export function DigitalTwinView({
     function syncFirefighters(elapsedS: number) {
       const tracks = firefightersRef.current;
       firefighterVisuals.forEach((visual, nodeId) => {
-        const present = tracks?.some((tag) => tag.node_id === nodeId) ?? false;
+        const present = tracks?.some(
+          (tag) => tag.node_id === nodeId && tag.state !== null,
+        ) ?? false;
         visual.avatar.root.visible = present;
         visual.avatar.directionArrow.visible = present;
         visual.trail.visible = present;

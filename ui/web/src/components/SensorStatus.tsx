@@ -3,6 +3,7 @@ import {
   BackendSource,
   EstimatedState,
   LiveAnchorMapSnapshot,
+  LiveSensorStatus,
   LiveUwbSnapshot,
 } from "../types/state";
 
@@ -14,6 +15,7 @@ type Props = {
   anchors: Anchor[];
   usableAnchorCount: number;
   liveAnchorMap: LiveAnchorMapSnapshot | null;
+  liveSensorStatus?: LiveSensorStatus | null;
 };
 
 export function SensorStatus({
@@ -24,6 +26,7 @@ export function SensorStatus({
   anchors,
   usableAnchorCount,
   liveAnchorMap,
+  liveSensorStatus,
 }: Props) {
   const liveAnchorCount = liveUwb?.active_anchor_count ?? 0;
   const configuredAnchorIds = new Set(anchors.map((anchor) => anchor.anchor_id));
@@ -43,7 +46,11 @@ export function SensorStatus({
       <h2>Sensors</h2>
       <dl>
         <dt>IMU</dt>
-        <dd>{source === "live" ? "waiting/live input" : "simulation"}</dd>
+        <dd>{source === "live"
+          ? liveSensorStatus?.imu_available
+            ? "live"
+            : "waiting"
+          : "simulation"}</dd>
         <dt>UWB</dt>
         <dd>{uwbStatus}</dd>
         <dt>tag</dt>

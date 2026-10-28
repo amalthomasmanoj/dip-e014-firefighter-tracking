@@ -64,6 +64,12 @@ export type LiveUwbSnapshot = {
   ranges: UwbRangeReading[];
 };
 
+export type LiveSensorStatus = {
+  responder_id: string;
+  imu_available: boolean;
+  imu_age_s: number | null;
+};
+
 export type Anchor = {
   anchor_id: string;
   x_m: number;

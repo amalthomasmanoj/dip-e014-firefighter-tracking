@@ -3,6 +3,7 @@ import { EstimatedState } from "../types/state";
 
 type Props = {
   state: EstimatedState | null;
+  positionAvailable?: boolean;
   onAlignHeading?: () => Promise<void>;
 };
 
@@ -22,7 +23,7 @@ export function postureLabel(posture: EstimatedState["activity"]["posture"]): st
   return posture === "lying_down" ? "lying down" : posture;
 }
 
-export function StatePanel({ state, onAlignHeading }: Props) {
+export function StatePanel({ state, positionAvailable = true, onAlignHeading }: Props) {
   const prone = state?.activity.posture === "lying_down";
   const [alignmentStatus, setAlignmentStatus] = useState<string | null>(null);
 
@@ -47,13 +48,13 @@ export function StatePanel({ state, onAlignHeading }: Props) {
       ) : null}
       <dl>
         <dt>x</dt>
-        <dd>{state ? state.position_m.x.toFixed(2) : "--"} m</dd>
+        <dd>{state && positionAvailable ? state.position_m.x.toFixed(2) : "--"} m</dd>
         <dt>y</dt>
-        <dd>{state ? state.position_m.y.toFixed(2) : "--"} m</dd>
+        <dd>{state && positionAvailable ? state.position_m.y.toFixed(2) : "--"} m</dd>
         <dt>z</dt>
-        <dd>{state ? state.position_m.z.toFixed(2) : "--"} m</dd>
+        <dd>{state && positionAvailable ? state.position_m.z.toFixed(2) : "--"} m</dd>
         <dt>speed</dt>
-        <dd>{state ? speed(state).toFixed(2) : "--"} m/s</dd>
+        <dd>{state && positionAvailable ? speed(state).toFixed(2) : "--"} m/s</dd>
         <dt>heading</dt>
         <dd>{state ? `${headingDegrees(state).toFixed(0)}°` : "--"}</dd>
         <dt>posture</dt>

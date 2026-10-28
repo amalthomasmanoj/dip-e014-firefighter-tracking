@@ -2,6 +2,7 @@ import {
   BackendHealth,
   BackendSource,
   LiveAnchorMapSnapshot,
+  LiveSensorStatus,
   LiveUwbSnapshot,
 } from "../types/state";
 
@@ -34,6 +35,18 @@ export async function fetchLiveAnchorMap(): Promise<LiveAnchorMapSnapshot> {
     throw new Error(`failed to load live anchor map: ${response.status}`);
   }
   return response.json() as Promise<LiveAnchorMapSnapshot>;
+}
+
+export async function fetchLiveSensorStatus(
+  responderId: string,
+): Promise<LiveSensorStatus> {
+  const response = await fetch(
+    `${baseUrl}/responders/${encodeURIComponent(responderId)}/sensor-status`,
+  );
+  if (!response.ok) {
+    throw new Error(`failed to load live sensor status: ${response.status}`);
+  }
+  return response.json() as Promise<LiveSensorStatus>;
 }
 
 export async function alignResponderHeading(

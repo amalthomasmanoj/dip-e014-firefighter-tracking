@@ -65,20 +65,27 @@ class LiveAnchorMapTracker:
         stale_after_s: float = 5.0,
         median_window: int = 5,
         minimum_samples_per_pair: int = 3,
+        maximum_pair_spread_m: float = 0.5,
+        initial_confirmation_sets: int = 3,
         movement_threshold_m: float = 0.25,
         movement_confirmation_sets: int = 3,
+        allow_remap: bool = False,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         if not configured_anchors:
             raise ValueError("at least one configured anchor is required")
         if stale_after_s <= 0.0 or median_window <= 0:
             raise ValueError("freshness and filter window must be positive")
-        if minimum_samples_per_pair <= 0 or movement_confirmation_sets <= 0:
+        if (
+            minimum_samples_per_pair <= 0
+            or initial_confirmation_sets <= 0
+            or movement_confirmation_sets <= 0
+        ):
             raise ValueError("sample and confirmation counts must be positive")
         if minimum_samples_per_pair > median_window:
             raise ValueError("minimum samples cannot exceed the median window")
-        if movement_threshold_m <= 0.0:
-            raise ValueError("movement threshold must be positive")
+        if maximum_pair_spread_m <= 0.0 or movement_threshold_m <= 0.0:
+            raise ValueError("spread and movement thresholds must be positive")
 
         self._configured_anchors = tuple(configured_anchors)
         self._survey_ids = tuple(anchor.anchor_id for anchor in configured_anchors[:3])
@@ -94,8 +101,11 @@ class LiveAnchorMapTracker:
         )
         self._stale_after_s = stale_after_s
         self._minimum_samples_per_pair = minimum_samples_per_pair
+        self._maximum_pair_spread_m = maximum_pair_spread_m
+        self._initial_confirmation_sets = initial_confirmation_sets
         self._movement_threshold_m = movement_threshold_m
         self._movement_confirmation_sets = movement_confirmation_sets
+        self._allow_remap = allow_remap
         self._clock = clock
         self._windows: dict[tuple[str, str], deque[float]] = {
             pair: deque(maxlen=median_window) for pair in self._required_pairs
@@ -161,6 +171,19 @@ class LiveAnchorMapTracker:
             self._last_error = "pair ranges are stale"
             return False
 
+        pair_spreads = {
+            pair: max(self._windows[pair]) - min(self._windows[pair])
+            for pair in self._required_pairs
+        }
+        if any(
+            spread_m > self._maximum_pair_spread_m
+            for spread_m in pair_spreads.values()
+        ):
+            self._pending_anchors = None
+            self._pending_count = 0
+            self._last_error = "pair ranges are unstable"
+            return False
+
         filtered = {
             pair: statistics.median(self._windows[pair])
             for pair in self._required_pairs
@@ -173,8 +196,31 @@ class LiveAnchorMapTracker:
 
         self._last_error = None
         if self._anchors is None:
+            if self._initial_confirmation_sets == 1:
+                self._commit(candidate)
+                return True
+            if self._pending_anchors is None or self._map_distance(
+                self._pending_anchors, candidate
+            ) > self._maximum_pair_spread_m / 2.0:
+                self._pending_anchors = candidate
+                self._pending_count = 1
+                return False
+            self._pending_anchors = candidate
+            self._pending_count += 1
+            if self._pending_count < self._initial_confirmation_sets:
+                return False
             self._commit(candidate)
             return True
+
+        # Installed anchors are stationary infrastructure. Keep collecting raw
+        # pair observations for health/diagnostics, but do not let RF noise
+        # redefine the coordinate frame during a responder session. A caller
+        # performing an intentional relocation survey can explicitly opt in to
+        # remapping (or restart the tracker to establish a new initial map).
+        if not self._allow_remap:
+            self._pending_anchors = None
+            self._pending_count = 0
+            return False
 
         displacement = max(
             math.hypot(new.x_m - old.x_m, new.y_m - old.y_m)
@@ -253,6 +299,11 @@ class LiveAnchorMapTracker:
                         if self._windows[pair]
                         else None
                     ),
+                    "window_spread_m": (
+                        max(self._windows[pair]) - min(self._windows[pair])
+                        if self._windows[pair]
+                        else None
+                    ),
                     "accepted": observed.accepted,
                     "age_s": current_time_s - observed.arrival_time_s,
                     "rssi_gap_db": measurement.rssi_gap_db,
@@ -264,6 +315,7 @@ class LiveAnchorMapTracker:
             "source": "live",
             "status": status,
             "map_version": self._map_version,
+            "remap_enabled": self._allow_remap,
             "frame": (
                 f"{self._survey_ids[0]}_origin_{self._survey_ids[1]}_positive_x"
                 if len(self._survey_ids) >= 2

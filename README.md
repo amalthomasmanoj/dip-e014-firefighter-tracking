@@ -103,8 +103,12 @@ a unique 2-D tag position, so the UI shows them as detected but unresolved.
 The anchor-v2 radio protocol can survey `A1-A2`, `A1-A3`, and `A2-A3`. Once the
 tag continuously commands those stage-5 exchanges and forwards the stage-6
 results described in [tools/uwb/README.md](tools/uwb/README.md), the backend
-builds a relative anchor map and updates `GET /anchors` when sustained physical
-movement is detected. `GET /uwb/anchor-map` exposes map version, freshness,
+builds a relative anchor map and updates `GET /anchors`. The first valid live
+map is locked for the lifetime of the backend process so ranging noise cannot
+move the coordinate frame or reset the position EKF. After an intentional
+physical anchor relocation, restart the backend to survey a new map. The
+tracker retains an explicit opt-in remap mode for controlled tests.
+`GET /uwb/anchor-map` exposes map version, freshness,
 accepted/raw/filtered pair ranges, and RF diagnostics. Flashing anchor v2 alone
 is insufficient because the current laptop link is the tag's UDP broadcast.
 For two live firefighter tags, use unique `tag_id` values and one designated

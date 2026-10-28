@@ -104,9 +104,11 @@ def test_tracker_commits_initial_map_after_filtered_complete_sets() -> None:
 
     assert not feed_triangle(tracker, start_sequence=1, arrival_time_s=10.0)
     assert not feed_triangle(tracker, start_sequence=4, arrival_time_s=10.2)
-    assert feed_triangle(tracker, start_sequence=7, arrival_time_s=10.4)
+    assert not feed_triangle(tracker, start_sequence=7, arrival_time_s=10.4)
+    assert not feed_triangle(tracker, start_sequence=10, arrival_time_s=10.6)
+    assert feed_triangle(tracker, start_sequence=13, arrival_time_s=10.8)
 
-    snapshot = tracker.snapshot(now_s=10.5)
+    snapshot = tracker.snapshot(now_s=10.9)
     assert snapshot["status"] == "ready"
     assert snapshot["map_version"] == 1
     assert tracker.anchors[1].x_m == pytest.approx(4.0)
@@ -120,7 +122,9 @@ def test_tracker_requires_sustained_movement_before_new_map_version() -> None:
         ANCHORS,
         median_window=3,
         minimum_samples_per_pair=1,
+        initial_confirmation_sets=1,
         movement_confirmation_sets=3,
+        allow_remap=True,
     )
     assert feed_triangle(tracker, start_sequence=1, arrival_time_s=10.0)
 
@@ -146,10 +150,17 @@ def test_tracker_requires_sustained_movement_before_new_map_version() -> None:
         d13=4.0,
         d23=5.657,
     )
-    assert feed_triangle(
+    assert not feed_triangle(
         tracker,
         start_sequence=13,
         arrival_time_s=10.8,
+        d13=4.0,
+        d23=5.657,
+    )
+    assert feed_triangle(
+        tracker,
+        start_sequence=16,
+        arrival_time_s=11.0,
         d13=4.0,
         d23=5.657,
     )
@@ -157,8 +168,76 @@ def test_tracker_requires_sustained_movement_before_new_map_version() -> None:
     assert tracker.anchors[2].y_m == pytest.approx(4.0, abs=0.02)
 
 
+def test_tracker_locks_initial_map_during_live_session_by_default() -> None:
+    tracker = LiveAnchorMapTracker(
+        ANCHORS,
+        median_window=3,
+        minimum_samples_per_pair=1,
+        initial_confirmation_sets=1,
+        movement_confirmation_sets=2,
+    )
+    assert feed_triangle(tracker, start_sequence=1, arrival_time_s=10.0)
+    initial_anchors = tracker.anchors
+
+    for index in range(6):
+        assert not feed_triangle(
+            tracker,
+            start_sequence=4 + index * 3,
+            arrival_time_s=10.2 + index * 0.2,
+            d13=4.0,
+            d23=5.657,
+        )
+
+    snapshot = tracker.snapshot(now_s=11.3)
+    assert snapshot["map_version"] == 1
+    assert snapshot["remap_enabled"] is False
+    assert tracker.anchors == initial_anchors
+
+
+def test_tracker_rejects_unstable_pair_windows_before_initial_commit() -> None:
+    tracker = LiveAnchorMapTracker(
+        ANCHORS,
+        median_window=3,
+        minimum_samples_per_pair=3,
+        initial_confirmation_sets=1,
+        maximum_pair_spread_m=0.5,
+    )
+
+    assert not feed_triangle(
+        tracker,
+        start_sequence=1,
+        arrival_time_s=10.0,
+        d12=4.0,
+    )
+    assert not feed_triangle(
+        tracker,
+        start_sequence=4,
+        arrival_time_s=10.2,
+        d12=5.0,
+    )
+    assert not feed_triangle(
+        tracker,
+        start_sequence=7,
+        arrival_time_s=10.4,
+        d12=4.0,
+    )
+
+    snapshot = tracker.snapshot(now_s=10.5)
+    assert snapshot["map_version"] == 0
+    assert snapshot["status"] == "surveying"
+    assert snapshot["last_error"] == "pair ranges are unstable"
+    assert next(
+        link for link in snapshot["links"] if link["responder_id"] == "A2"
+    )["window_spread_m"] == pytest.approx(1.0)
+
+
 def test_invalid_and_stale_results_degrade_without_replacing_last_map() -> None:
-    tracker = LiveAnchorMapTracker(ANCHORS, minimum_samples_per_pair=1, stale_after_s=1.0)
+    tracker = LiveAnchorMapTracker(
+        ANCHORS,
+        minimum_samples_per_pair=1,
+        initial_confirmation_sets=1,
+        stale_after_s=1.0,
+    )
     assert feed_triangle(tracker, start_sequence=1, arrival_time_s=10.0)
     original = tracker.anchors
 
@@ -184,7 +263,7 @@ def test_adapter_to_live_api_commits_surveyed_anchor_coordinates() -> None:
     app = create_app(source_mode=SourceMode.UDP, anchors=ANCHORS)
     sequence_tracker = SequenceTracker()
     sequence_number = 0
-    for cycle in range(3):
+    for cycle in range(5):
         sweep = parse_dwm3000_sweep(
             {
                 "t": 1_000 + cycle,

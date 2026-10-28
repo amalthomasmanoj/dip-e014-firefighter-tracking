@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 
 import pytest
 
-from backend.ingestion.pipeline import ingest_datagram
+from backend.ingestion.pipeline import ingest_datagram, ingest_datagrams
 from backend.ingestion.sequencing import SequenceTracker
 from backend.models.measurements import ImuMeasurement, UwbRangeMeasurement
 
@@ -95,3 +96,33 @@ def test_original_timestamp_is_preserved_separately_from_arrival_time() -> None:
 
     assert event.measurement.timestamp_us == 123456789
     assert event.arrival_time_s == 987.654
+
+
+async def _payload_stream(payloads: list[bytes]):
+    for payload in payloads:
+        yield payload
+
+
+def test_invalid_datagrams_do_not_end_the_live_stream() -> None:
+    first = encode_packet(load_example("imu_packet.json"))
+    later_packet = dict(load_example("imu_packet.json"), sequence_number=1002)
+    later = encode_packet(later_packet)
+
+    async def collect():
+        return [
+            event
+            async for event in ingest_datagrams(
+                _payload_stream(
+                    [
+                        first,
+                        b"DIP_PING 862377fc091f8cf4",
+                        b"\xff\xfe\x00binary",
+                        later,
+                    ]
+                )
+            )
+        ]
+
+    events = asyncio.run(collect())
+
+    assert [event.measurement.sequence_number for event in events] == [1001, 1002]

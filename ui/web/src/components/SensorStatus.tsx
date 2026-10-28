@@ -1,4 +1,10 @@
-import { Anchor, BackendSource, EstimatedState, LiveUwbSnapshot } from "../types/state";
+import {
+  Anchor,
+  BackendSource,
+  EstimatedState,
+  LiveAnchorMapSnapshot,
+  LiveUwbSnapshot,
+} from "../types/state";
 
 type Props = {
   state: EstimatedState | null;
@@ -7,6 +13,7 @@ type Props = {
   liveUwb: LiveUwbSnapshot | null;
   anchors: Anchor[];
   usableAnchorCount: number;
+  liveAnchorMap: LiveAnchorMapSnapshot | null;
 };
 
 export function SensorStatus({
@@ -16,6 +23,7 @@ export function SensorStatus({
   liveUwb,
   anchors,
   usableAnchorCount,
+  liveAnchorMap,
 }: Props) {
   const liveAnchorCount = liveUwb?.active_anchor_count ?? 0;
   const configuredAnchorIds = new Set(anchors.map((anchor) => anchor.anchor_id));
@@ -46,6 +54,10 @@ export function SensorStatus({
             ? `${liveAnchorCount} received · ${usableAnchorCount} mapped`
             : state?.status.active_anchor_count ?? "--"}
         </dd>
+        {source === "live" ? <>
+          <dt>anchor survey</dt>
+          <dd>{liveAnchorMap?.status ?? "waiting"} · map v{liveAnchorMap?.map_version ?? 0}</dd>
+        </> : null}
         <dt>ZUPT</dt>
         <dd>{state?.status.zupt_active ? "active" : "inactive"}</dd>
         <dt>connection</dt>

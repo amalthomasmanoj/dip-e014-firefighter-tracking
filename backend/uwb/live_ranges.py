@@ -43,7 +43,11 @@ class LiveUwbRangeTracker:
             arrival_time_s=event.arrival_time_s,
         )
 
-    def snapshot(self, now_s: float | None = None) -> dict[str, object]:
+    def snapshot(
+        self,
+        now_s: float | None = None,
+        node_id: str | None = None,
+    ) -> dict[str, object]:
         current_time_s = self._clock() if now_s is None else now_s
         active = {
             key: observed
@@ -61,7 +65,7 @@ class LiveUwbRangeTracker:
                 "ranges": [],
             }
 
-        latest_node_id = max(
+        latest_node_id = node_id or max(
             active.values(),
             key=lambda observed: observed.arrival_time_s,
         ).measurement.node_id
@@ -70,6 +74,15 @@ class LiveUwbRangeTracker:
             for (node_id, _anchor_id), observed in active.items()
             if node_id == latest_node_id
         ]
+        if not node_ranges:
+            return {
+                "source": "live",
+                "tag_node_id": node_id,
+                "tag_present": False,
+                "latest_timestamp_us": None,
+                "active_anchor_count": 0,
+                "ranges": [],
+            }
         node_ranges.sort(key=lambda observed: observed.measurement.anchor_id)
 
         return {

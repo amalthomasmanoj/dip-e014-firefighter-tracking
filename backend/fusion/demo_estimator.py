@@ -59,17 +59,22 @@ class DemoSensorEstimator:
         self._range_median_window = range_median_window
         self._position_filter = PositionEkf2D()
 
-    def set_anchors(self, anchors: Sequence[Anchor]) -> None:
+    def set_anchors(self, anchors: Sequence[Anchor], *, reset_position: bool = False) -> None:
         """Install a known map atomically without mixing ranges from the old map.
 
-        Coordinates remain in the same world frame; retain the position filter.
-        This is not anchor self-survey or relative-frame estimation.
+        Reset the position state when a new relative survey frame is installed;
+        otherwise retain it for same-frame simulation changes.
         """
         self._anchors = list(anchors)
         self._configured_anchor_ids = {anchor.anchor_id for anchor in anchors}
         self._latest_ranges.clear()
         self._range_timestamps.clear()
         self._range_windows.clear()
+        if reset_position:
+            self._position_filter = PositionEkf2D()
+            self._last_position = None
+            self._last_position_timestamp_us = None
+            self._uncertainty_m = 1.5
 
     def update(self, measurement: Measurement) -> EstimatedState | None:
         if isinstance(measurement, ImuMeasurement):

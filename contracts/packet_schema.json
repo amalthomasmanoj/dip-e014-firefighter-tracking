@@ -9,11 +9,12 @@
     "node_id": { "type": "string", "minLength": 1 },
     "sequence_number": { "type": "integer", "minimum": 0 },
     "timestamp_us": { "type": "integer", "minimum": 0 },
-    "type": { "type": "string", "enum": ["imu", "uwb_range"] },
+    "type": { "type": "string", "enum": ["imu", "uwb_range", "uwb_pair_range"] },
     "data": {
       "oneOf": [
         { "$ref": "#/$defs/imu_data" },
-        { "$ref": "#/$defs/uwb_range_data" }
+        { "$ref": "#/$defs/uwb_range_data" },
+        { "$ref": "#/$defs/uwb_pair_range_data" }
       ]
     }
   },
@@ -25,6 +26,10 @@
     {
       "if": { "properties": { "type": { "const": "uwb_range" } } },
       "then": { "properties": { "data": { "$ref": "#/$defs/uwb_range_data" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "uwb_pair_range" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/uwb_pair_range_data" } } }
     }
   ],
   "additionalProperties": false,
@@ -52,7 +57,18 @@
         "quality": { "type": ["number", "null"] }
       },
       "additionalProperties": false
+    },
+    "uwb_pair_range_data": {
+      "type": "object",
+      "required": ["peer_id", "range_m", "valid", "rssi_gap_db", "rssi_dbm"],
+      "properties": {
+        "peer_id": { "type": "string", "minLength": 1 },
+        "range_m": { "type": "number", "minimum": 0 },
+        "valid": { "type": "boolean" },
+        "rssi_gap_db": { "type": ["number", "null"] },
+        "rssi_dbm": { "type": ["number", "null"] }
+      },
+      "additionalProperties": false
     }
   }
 }
-

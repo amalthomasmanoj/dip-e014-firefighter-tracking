@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
 from typing import Any, Literal
 
-
-PacketType = Literal["imu", "uwb_range"]
+PacketType = Literal["imu", "uwb_range", "uwb_pair_range"]
 
 
 @dataclass(frozen=True)
@@ -32,7 +31,21 @@ class UwbRangeMeasurement:
     quality: float | None
 
 
-Measurement = ImuMeasurement | UwbRangeMeasurement
+@dataclass(frozen=True)
+class UwbPairRangeMeasurement:
+    """Raw anchor-to-anchor survey result forwarded by the commanding tag."""
+
+    timestamp_us: int
+    node_id: str
+    sequence_number: int
+    peer_id: str
+    range_m: float
+    valid: bool
+    rssi_gap_db: float | None
+    rssi_dbm: float | None
+
+
+Measurement = ImuMeasurement | UwbRangeMeasurement | UwbPairRangeMeasurement
 
 
 def _require_number(data: dict[str, Any], key: str) -> float:
@@ -95,6 +108,31 @@ def measurement_from_packet(packet: dict[str, Any]) -> Measurement:
             range_m=_require_non_negative_number(data, "range_m"),
             valid=valid,
             quality=None if quality is None else float(quality),
+        )
+
+    if packet_type == "uwb_pair_range":
+        peer_id = data.get("peer_id")
+        valid = data.get("valid")
+        rssi_gap_db = data.get("rssi_gap_db")
+        rssi_dbm = data.get("rssi_dbm")
+        if not isinstance(peer_id, str) or not peer_id:
+            raise ValueError("peer_id must be a non-empty string")
+        if not isinstance(valid, bool):
+            raise ValueError("valid must be a boolean")
+        for key, value in (("rssi_gap_db", rssi_gap_db), ("rssi_dbm", rssi_dbm)):
+            if value is not None and (
+                not isinstance(value, int | float)
+                or isinstance(value, bool)
+                or not math.isfinite(float(value))
+            ):
+                raise ValueError(f"{key} must be finite or null")
+        return UwbPairRangeMeasurement(
+            **base,
+            peer_id=peer_id,
+            range_m=_require_non_negative_number(data, "range_m"),
+            valid=valid,
+            rssi_gap_db=None if rssi_gap_db is None else float(rssi_gap_db),
+            rssi_dbm=None if rssi_dbm is None else float(rssi_dbm),
         )
 
     raise ValueError(f"unsupported packet type {packet_type!r}")

@@ -36,6 +36,7 @@ export type EstimatedState = {
 export type StateMessage = {
   type: "estimated_state";
   source: "simulation" | "live" | "replay";
+  node_id?: string;
   state: EstimatedState;
 };
 
@@ -68,4 +69,29 @@ export type Anchor = {
   x_m: number;
   y_m: number;
   z_m: number;
+};
+
+export type LiveAnchorLink = {
+  initiator_id: string;
+  responder_id: string;
+  timestamp_us: number;
+  sequence_number: number;
+  raw_range_m: number;
+  filtered_range_m: number | null;
+  valid: boolean;
+  accepted: boolean;
+  age_s: number;
+  rssi_gap_db: number | null;
+  rssi_dbm: number | null;
+};
+
+export type LiveAnchorMapSnapshot = {
+  source: "live";
+  status: "unavailable" | "surveying" | "ready" | "degraded";
+  map_version: number;
+  frame: string;
+  reference_anchor_ids: string[];
+  anchors: Anchor[];
+  links: LiveAnchorLink[];
+  last_error: string | null;
 };

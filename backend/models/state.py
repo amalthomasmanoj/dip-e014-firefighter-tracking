@@ -53,9 +53,16 @@ class EstimatedState:
         return asdict(self)
 
 
-def websocket_message(state: EstimatedState, source: str = "simulation") -> dict:
-    return {
+def websocket_message(
+    state: EstimatedState,
+    source: str = "simulation",
+    node_id: str | None = None,
+) -> dict:
+    message = {
         "type": "estimated_state",
         "source": source,
         "state": state.to_dict(),
     }
+    if node_id is not None:
+        message["node_id"] = node_id
+    return message

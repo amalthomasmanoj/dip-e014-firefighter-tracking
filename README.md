@@ -118,15 +118,9 @@ configuration are listed as unmapped instead of silently disappearing.
 Live UWB positions are derived only from synchronized anchor sweeps, using a
 short per-anchor median window followed by the constant-velocity 2-D position
 EKF in `backend/fusion/position_ekf.py`. The EKF rejects implausible innovation
-jumps and applies a low-speed deadband to reduce stationary marker jitter. When
-generic foot-IMU packets use the same `node_id` and timestamp clock as their UWB
-tag, a detected stationary window also applies a zero-velocity update to the
-position EKF. This arrests false coasting without assuming undocumented IMU
-axes. The supplied DWM3000 tag-v3 firmware currently emits UWB sweeps only, so
-the live ZUPT path becomes active only after an IMU producer is connected. Full
-acceleration propagation remains blocked until the sensor-to-shoe transform and
-calibration are measured and documented; this is not yet the production ESKF.
-Raw range values remain unchanged at `GET /uwb/ranges` for diagnostics and replay.
+jumps and applies a low-speed deadband to reduce stationary marker jitter. This
+is a UWB position filter, not the final IMU error-state Kalman filter. Raw range
+values remain unchanged at `GET /uwb/ranges` for diagnostics and replay.
 The backend exposes the current fresh-range view at `GET /uwb/ranges` without
 adding hardware-specific fields to the shared measurement contract.
 

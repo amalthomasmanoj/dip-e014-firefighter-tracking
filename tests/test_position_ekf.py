@@ -50,31 +50,3 @@ def test_position_ekf_tracks_sustained_motion() -> None:
     assert estimate.x_m == pytest.approx(1.95, abs=0.2)
     assert estimate.y_m == pytest.approx(0.5, abs=0.1)
     assert estimate.velocity_x_mps == pytest.approx(0.5, abs=0.2)
-
-
-def test_position_ekf_uses_zupt_to_stop_false_coasting() -> None:
-    ekf = PositionEkf2D(acceleration_noise_mps2=0.5)
-    moving = None
-    for index in range(20):
-        moving = ekf.update(
-            index * 100_000,
-            (index * 0.08, 1.0),
-            0.15,
-        )
-
-    assert moving is not None
-    assert moving.velocity_x_mps > 0.4
-
-    stopped = None
-    for index in range(1, 4):
-        stopped = ekf.apply_zero_velocity(1_900_000 + index * 20_000)
-
-    assert stopped is not None
-    assert stopped.velocity_x_mps == pytest.approx(0.0, abs=0.03)
-    assert stopped.velocity_y_mps == pytest.approx(0.0, abs=0.03)
-
-
-def test_position_ekf_ignores_zupt_before_uwb_initialization() -> None:
-    ekf = PositionEkf2D()
-
-    assert ekf.apply_zero_velocity(100_000) is None

@@ -63,9 +63,12 @@ class PositionEkf2D:
             self._timestamp_us = timestamp_us
             return self._estimate(measurement_accepted=True)
 
-        if timestamp_us <= self._timestamp_us:
+        dt_s = (timestamp_us - self._timestamp_us) / 1_000_000.0
+        if dt_s <= 0.0:
             return self._estimate(measurement_accepted=False)
-        self._advance_to(timestamp_us)
+        dt_s = min(dt_s, 1.0)
+        self._predict(dt_s)
+        self._timestamp_us = timestamp_us
 
         observation = np.array(
             [
@@ -101,60 +104,6 @@ class PositionEkf2D:
             self._state[2:] = 0.0
 
         return self._estimate(measurement_accepted=accepted)
-
-    def apply_zero_velocity(
-        self,
-        timestamp_us: int,
-        velocity_sigma_mps: float = 0.03,
-    ) -> PositionEstimate | None:
-        """Apply a foot-stationary zero-velocity pseudo-measurement.
-
-        The update does not use accelerometer axes, so it is safe before the
-        physical sensor-to-shoe transform is known. It only applies after UWB
-        has initialized position and velocity state.
-        """
-        if velocity_sigma_mps <= 0.0:
-            raise ValueError("velocity sigma must be positive")
-        if self._state is None or self._covariance is None or self._timestamp_us is None:
-            return None
-        if timestamp_us < self._timestamp_us:
-            return self._estimate(measurement_accepted=False)
-        if timestamp_us > self._timestamp_us:
-            self._advance_to(timestamp_us)
-
-        observation = np.array(
-            [
-                [0.0, 0.0, 1.0, 0.0],
-                [0.0, 0.0, 0.0, 1.0],
-            ]
-        )
-        measurement_covariance = np.eye(2) * velocity_sigma_mps**2
-        innovation = -(observation @ self._state)
-        innovation_covariance = (
-            observation @ self._covariance @ observation.T + measurement_covariance
-        )
-        kalman_gain = (
-            self._covariance
-            @ observation.T
-            @ np.linalg.inv(innovation_covariance)
-        )
-        self._state = self._state + kalman_gain @ innovation
-        identity = np.eye(4)
-        correction = identity - kalman_gain @ observation
-        self._covariance = (
-            correction @ self._covariance @ correction.T
-            + kalman_gain @ measurement_covariance @ kalman_gain.T
-        )
-
-        if np.hypot(self._state[2], self._state[3]) < self._low_speed_deadband_mps:
-            self._state[2:] = 0.0
-        return self._estimate(measurement_accepted=True)
-
-    def _advance_to(self, timestamp_us: int) -> None:
-        assert self._timestamp_us is not None
-        dt_s = min((timestamp_us - self._timestamp_us) / 1_000_000.0, 1.0)
-        self._predict(dt_s)
-        self._timestamp_us = timestamp_us
 
     def _predict(self, dt_s: float) -> None:
         assert self._state is not None

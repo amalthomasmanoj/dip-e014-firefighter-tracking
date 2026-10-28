@@ -371,3 +371,22 @@ dd {
   color: #ff8a7e;
   font-weight: 600;
 }
+
+.heading-alignment {
+  margin-top: 0.8rem;
+}
+
+.heading-alignment button {
+  width: 100%;
+  border: 1px solid #3974a8;
+  border-radius: 5px;
+  padding: 0.55rem;
+  background: rgba(57, 116, 168, 0.12);
+  color: inherit;
+  cursor: pointer;
+}
+
+.heading-alignment p {
+  margin: 0.45rem 0 0;
+  font-size: 0.75rem;
+}

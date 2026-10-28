@@ -20,6 +20,7 @@ type Props = {
 
 type AvatarParts = {
   root: THREE.Group;
+  directionArrow: THREE.ArrowHelper;
   torso: THREE.Mesh;
   head: THREE.Mesh;
   leftLeg: THREE.Mesh;
@@ -64,9 +65,17 @@ function createAvatar(color = 0xd83a2e): AvatarParts {
   const leftArm = createCylinder(0.045, 0.62, limbMaterial);
   const rightArm = createCylinder(0.045, 0.62, limbMaterial);
   const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.045, 16, 12), beaconMaterial);
+  const directionArrow = new THREE.ArrowHelper(
+    new THREE.Vector3(1, 0, 0),
+    new THREE.Vector3(),
+    0.8,
+    0xff7a1a,
+    0.22,
+    0.13,
+  );
 
   root.add(torso, chestStripe, head, leftLeg, rightLeg, leftArm, rightArm, beacon);
-  return { root, torso, head, leftLeg, rightLeg, leftArm, rightArm, beacon };
+  return { root, directionArrow, torso, head, leftLeg, rightLeg, leftArm, rightArm, beacon };
 }
 
 function createTextSprite(text: string): THREE.Sprite {
@@ -112,10 +121,12 @@ function updateAvatar(parts: AvatarParts, state: EstimatedState | null, elapsedS
   const root = parts.root;
   if (!state) {
     root.visible = false;
+    parts.directionArrow.visible = false;
     return;
   }
 
   root.visible = true;
+  parts.directionArrow.visible = true;
 
   const lying = state.activity.posture === "lying_down";
   const headingRad = -headingFromQuaternion(state.orientation_xyzw);
@@ -123,6 +134,8 @@ function updateAvatar(parts: AvatarParts, state: EstimatedState | null, elapsedS
   // A prone responder keeps their heading but the body axis tips onto the
   // floor, so compose the tip after the heading instead of overwriting it.
   root.position.set(state.position_m.x, lying ? 0.22 : 0, -state.position_m.y);
+  parts.directionArrow.position.set(state.position_m.x, 0.08, -state.position_m.y);
+  parts.directionArrow.rotation.y = headingFromQuaternion(state.orientation_xyzw);
   root.quaternion.setFromEuler(new THREE.Euler(0, headingRad, 0));
   if (lying) {
     root.quaternion.multiply(
@@ -131,15 +144,14 @@ function updateAvatar(parts: AvatarParts, state: EstimatedState | null, elapsedS
   }
 
   const walking = state.activity.motion === "walking" && !lying;
-  const crouching = state.activity.posture === "crouching";
   const gait = walking ? Math.sin(elapsedS * 8.5) : 0;
-  const crouchDrop = crouching ? 0.34 : 0;
-  const legHeight = crouching ? 0.48 : 0.72;
-  const torsoHeight = crouching ? 0.58 : 0.74;
+  const crouchDrop = 0;
+  const legHeight = 0.72;
+  const torsoHeight = 0.74;
 
   parts.torso.scale.y = torsoHeight / 0.74;
   parts.torso.position.set(0, 0.98 - crouchDrop, 0);
-  parts.torso.rotation.z = crouching ? -0.18 : 0;
+  parts.torso.rotation.z = 0;
 
   parts.head.position.set(0.02, 1.47 - crouchDrop, 0);
   parts.beacon.position.set(0.02, 1.68 - crouchDrop, 0);
@@ -148,17 +160,17 @@ function updateAvatar(parts: AvatarParts, state: EstimatedState | null, elapsedS
   parts.rightLeg.scale.y = legHeight / 0.72;
   parts.leftLeg.position.set(-0.095, legHeight / 2, 0);
   parts.rightLeg.position.set(0.095, legHeight / 2, 0);
-  parts.leftLeg.rotation.x = gait * 0.38 + (crouching ? 0.42 : 0);
-  parts.rightLeg.rotation.x = -gait * 0.38 + (crouching ? 0.42 : 0);
-  parts.leftLeg.rotation.z = crouching ? -0.18 : 0;
-  parts.rightLeg.rotation.z = crouching ? 0.18 : 0;
+  parts.leftLeg.rotation.x = gait * 0.38;
+  parts.rightLeg.rotation.x = -gait * 0.38;
+  parts.leftLeg.rotation.z = 0;
+  parts.rightLeg.rotation.z = 0;
 
   parts.leftArm.position.set(-0.27, 0.98 - crouchDrop, 0);
   parts.rightArm.position.set(0.27, 0.98 - crouchDrop, 0);
   parts.leftArm.rotation.x = -gait * 0.32;
   parts.rightArm.rotation.x = gait * 0.32;
-  parts.leftArm.rotation.z = crouching ? 0.34 : 0.18;
-  parts.rightArm.rotation.z = crouching ? -0.34 : -0.18;
+  parts.leftArm.rotation.z = 0.18;
+  parts.rightArm.rotation.z = -0.18;
 }
 
 function updateTrajectory(line: THREE.Line, trajectory: EstimatedState[]): void {
@@ -206,13 +218,28 @@ function runCanvasFallback(
     const point = project(state.position_m.x, state.position_m.y);
     const lying = state.activity.posture === "lying_down";
     const walking = state.activity.motion === "walking" && !lying;
-    const crouching = state.activity.posture === "crouching";
     const gait = walking ? Math.sin(elapsedS * 8.5) : 0;
-    const bodyHeight = crouching ? 42 : 68;
-    const legHeight = crouching ? 22 : 38;
+    const bodyHeight = 68;
+    const legHeight = 38;
 
     context.save();
     context.translate(point.x, point.y);
+    context.save();
+    context.rotate(-headingFromQuaternion(state.orientation_xyzw));
+    context.strokeStyle = "#ff7a1a";
+    context.fillStyle = "#ff7a1a";
+    context.lineWidth = 4;
+    context.beginPath();
+    context.moveTo(0, 0);
+    context.lineTo(38, 0);
+    context.stroke();
+    context.beginPath();
+    context.moveTo(38, 0);
+    context.lineTo(27, -7);
+    context.lineTo(27, 7);
+    context.closePath();
+    context.fill();
+    context.restore();
     context.rotate(-headingFromQuaternion(state.orientation_xyzw) * 0.35);
     if (lying) {
       // Tip the whole figure onto its side and drop it to floor level.
@@ -490,7 +517,7 @@ export function DigitalTwinView({
     scene.add(trajectoryLine);
 
     const avatar = createAvatar();
-    scene.add(avatar.root);
+    scene.add(avatar.root, avatar.directionArrow);
     const firefighterVisuals = new Map<string, { avatar: AvatarParts; trail: THREE.Line; label: THREE.Sprite }>();
     const peerGroup = new THREE.Group();
     scene.add(peerGroup);
@@ -499,6 +526,7 @@ export function DigitalTwinView({
       firefighterVisuals.forEach((visual, nodeId) => {
         const present = tracks?.some((tag) => tag.node_id === nodeId) ?? false;
         visual.avatar.root.visible = present;
+        visual.avatar.directionArrow.visible = present;
         visual.trail.visible = present;
         visual.label.visible = present;
       });
@@ -512,7 +540,12 @@ export function DigitalTwinView({
             label: createTextSprite(tag.label),
           };
           visual.label.scale.set(1.8, 0.4, 1);
-          scene.add(visual.avatar.root, visual.trail, visual.label);
+          scene.add(
+            visual.avatar.root,
+            visual.avatar.directionArrow,
+            visual.trail,
+            visual.label,
+          );
           firefighterVisuals.set(tag.node_id, visual);
         }
         updateAvatar(visual.avatar, tag.state, elapsedS);

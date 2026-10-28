@@ -222,7 +222,7 @@ export default function App() {
               </select>
             </section>
           </> : null}
-          <HeartRatePanel />
+          <HeartRatePanel selectedResponderId={source === "simulation" ? selectedTag : undefined} />
           <StatePanel state={visualizedState} />
           <SensorStatus
             state={visualizedState}

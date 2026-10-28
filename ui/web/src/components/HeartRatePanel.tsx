@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import { fetchHeartRate, HeartRateSnapshot } from "../api/heartRate";
+import {
+  fetchHeartRate,
+  heartRateMatchesResponder,
+  HeartRateSnapshot,
+} from "../api/heartRate";
 
 const labels: Record<HeartRateSnapshot["status"], string> = {
   disabled: "Not configured",
@@ -13,7 +17,9 @@ const labels: Record<HeartRateSnapshot["status"], string> = {
   error: "Connection problem",
 };
 
-export function HeartRatePanel() {
+type Props = { selectedResponderId?: string };
+
+export function HeartRatePanel({ selectedResponderId }: Props) {
   const [snapshot, setSnapshot] = useState<HeartRateSnapshot | null>(null);
   const [online, setOnline] = useState(false);
   useEffect(() => {
@@ -44,7 +50,8 @@ export function HeartRatePanel() {
     };
   }, []);
 
-  const live = online && snapshot?.status === "connected" && snapshot.bpm !== null;
+  const assigned = heartRateMatchesResponder(snapshot, selectedResponderId);
+  const live = assigned && online && snapshot?.status === "connected" && snapshot.bpm !== null;
   return (
     <section className="side-panel heart-rate-panel" aria-label="Heart rate">
       <div className="heart-rate-heading">
@@ -55,8 +62,13 @@ export function HeartRatePanel() {
       </div>
       <p className="heart-rate-value">{live ? snapshot.bpm : "--"}<span> BPM</span></p>
       <p className="heart-rate-caption">{snapshot?.wearer ?? "Wearer"} · real sensor</p>
+      {!assigned ? (
+        <p className="heart-rate-caption">
+          No heart-rate strap assigned to this responder.
+        </p>
+      ) : null}
       {online && snapshot?.device_name ? <p className="heart-rate-caption">{snapshot.device_name}</p> : null}
-      {live && snapshot.age_s !== null ?
+      {live && snapshot && snapshot.age_s !== null ?
         <p className="heart-rate-caption">Received {snapshot.age_s.toFixed(1)} s ago</p> : null}
       {online && snapshot?.status === "disabled" ?
         <p className="heart-rate-caption">Configure the H808S on the backend to receive readings.</p> : null}

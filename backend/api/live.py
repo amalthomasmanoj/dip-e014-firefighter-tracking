@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import suppress
-from typing import Callable
 
 from backend.config.plugins import (
     activity_classifier_from_env,
@@ -80,6 +79,9 @@ class LiveUdpStateHub:
         if estimator is None:
             raise KeyError(responder_id)
         estimator.align_heading(heading_rad)
+
+    def uwb_node_id(self, responder_or_node_id: str) -> str:
+        return self._registry.uwb_node_id(responder_or_node_id)
 
     async def _run(self) -> None:
         async for event in udp_measurement_events():

@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from backend.api.live import LiveUdpStateHub
 from backend.api.websocket import state_messages_for_source
 from backend.config.source import SourceMode, source_mode_from_env
+from backend.heart_rate.receiver import HeartRateReceiver
 from backend.simulation.world import SimulationWorld
 from backend.uwb.anchors import Anchor, anchors_from_env
 from backend.uwb.live_ranges import LiveUwbRangeTracker
@@ -31,6 +32,7 @@ def create_app(
 ) -> FastAPI:
     active_source_mode = source_mode or source_mode_from_env()
     configured_anchors = tuple(anchors) if anchors is not None else anchors_from_env()
+    heart_rate = HeartRateReceiver.from_env()
     live_uwb_ranges = LiveUwbRangeTracker()
     live_hub = LiveUdpStateHub(live_uwb_ranges, configured_anchors)
     simulation = (
@@ -43,9 +45,11 @@ def create_app(
             await live_hub.start()
         if simulation is not None:
             await simulation.start()
+        await heart_rate.start()
         try:
             yield
         finally:
+            await heart_rate.stop()
             await live_hub.stop()
             if simulation is not None:
                 await simulation.stop()
@@ -97,6 +101,10 @@ def create_app(
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
         return {"accepted": True}
+
+    @app.get("/heart-rate")
+    def heart_rate_snapshot() -> dict:
+        return heart_rate.snapshot()
 
     @app.get("/uwb/ranges")
     def uwb_ranges() -> dict[str, object]:

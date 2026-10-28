@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import suppress
 
@@ -13,10 +14,10 @@ from backend.config.responders import ResponderConfig, ResponderRegistry
 from backend.fusion.demo_estimator import DemoSensorEstimator
 from backend.ingestion.events import IngestedMeasurement
 from backend.ingestion.pipeline import udp_measurement_events
-from backend.models.measurements import UwbPairRangeMeasurement
+from backend.models.measurements import ImuMeasurement, UwbPairRangeMeasurement
 from backend.models.state import websocket_message
 from backend.uwb.anchor_map import LiveAnchorMapTracker
-from backend.uwb.anchors import DEFAULT_ANCHORS, Anchor
+from backend.uwb.anchors import Anchor
 from backend.uwb.live_ranges import LiveUwbRangeTracker
 
 
@@ -26,17 +27,20 @@ class LiveUdpStateHub:
     def __init__(
         self,
         range_tracker: LiveUwbRangeTracker,
-        anchors: tuple[Anchor, ...] = DEFAULT_ANCHORS,
+        anchors: tuple[Anchor, ...] = (),
         anchor_map_tracker: LiveAnchorMapTracker | None = None,
         responders: tuple[ResponderConfig, ...] = (),
         estimator_factory: Callable[[], DemoSensorEstimator] | None = None,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._range_tracker = range_tracker
         self._anchor_map_tracker = anchor_map_tracker
         self._anchors = anchors
         self._registry = ResponderRegistry(responders)
         self._estimator_factory = estimator_factory
+        self._clock = clock
         self._estimators: dict[str, DemoSensorEstimator] = {}
+        self._latest_imu_arrival_s: dict[str, float] = {}
         self._subscribers: set[asyncio.Queue[str]] = set()
         self._task: asyncio.Task[None] | None = None
 
@@ -50,6 +54,8 @@ class LiveUdpStateHub:
         if isinstance(event.measurement, UwbPairRangeMeasurement):
             return None
         responder_id, measurement = self._registry.resolve(event.measurement)
+        if isinstance(measurement, ImuMeasurement):
+            self._latest_imu_arrival_s[responder_id] = event.arrival_time_s
         estimator = self._estimators.get(responder_id)
         if estimator is None:
             estimator = self._new_estimator()
@@ -82,6 +88,26 @@ class LiveUdpStateHub:
 
     def uwb_node_id(self, responder_or_node_id: str) -> str:
         return self._registry.uwb_node_id(responder_or_node_id)
+
+    def sensor_status(
+        self,
+        responder_id: str,
+        *,
+        now_s: float | None = None,
+        imu_stale_after_s: float = 1.0,
+    ) -> dict[str, object]:
+        current_time_s = self._clock() if now_s is None else now_s
+        arrival_time_s = self._latest_imu_arrival_s.get(responder_id)
+        age_s = (
+            None
+            if arrival_time_s is None
+            else max(0.0, current_time_s - arrival_time_s)
+        )
+        return {
+            "responder_id": responder_id,
+            "imu_available": age_s is not None and age_s <= imu_stale_after_s,
+            "imu_age_s": age_s,
+        }
 
     async def _run(self) -> None:
         async for event in udp_measurement_events():

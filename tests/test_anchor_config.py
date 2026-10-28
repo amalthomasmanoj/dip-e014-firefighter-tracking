@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from backend.uwb.anchors import DEFAULT_ANCHORS, anchors_from_env, load_anchors
+from backend.uwb.anchors import (
+    DEFAULT_ANCHORS,
+    anchors_are_explicitly_configured,
+    anchors_from_env,
+    load_anchors,
+)
 
 
 def test_load_anchors_accepts_arbitrary_anchor_ids(tmp_path) -> None:
@@ -47,3 +52,7 @@ anchors:
 
 def test_anchors_from_env_uses_defaults_without_config() -> None:
     assert anchors_from_env({}) == DEFAULT_ANCHORS
+    assert anchors_are_explicitly_configured({}) is False
+    assert anchors_are_explicitly_configured(
+        {"E014_ANCHORS_CONFIG": "anchors.yaml"}
+    ) is True

@@ -252,11 +252,29 @@ def test_invalid_and_stale_results_degrade_without_replacing_last_map() -> None:
 
 def test_fewer_than_three_configured_anchors_keep_fixed_bringup_map() -> None:
     configured = ANCHORS[:2]
-    tracker = LiveAnchorMapTracker(configured)
+    tracker = LiveAnchorMapTracker(configured, use_configured_fallback=True)
 
     assert not tracker.observe(pair_event("A1", "A2", 4.0, 1, 10.0))
     assert tracker.anchors == configured
     assert tracker.snapshot(now_s=10.1)["status"] == "unavailable"
+
+
+def test_live_app_does_not_expose_demo_coordinates_before_survey(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("E014_ANCHORS_CONFIG", raising=False)
+    app = create_app(source_mode=SourceMode.UDP)
+    anchors_route = next(
+        route for route in app.routes if getattr(route, "path", None) == "/anchors"
+    )
+    anchor_map_route = next(
+        route for route in app.routes if getattr(route, "path", None) == "/uwb/anchor-map"
+    )
+
+    assert anchors_route.endpoint() == []
+    snapshot = anchor_map_route.endpoint()
+    assert snapshot["map_version"] == 0
+    assert snapshot["anchors"] == []
 
 
 def test_adapter_to_live_api_commits_surveyed_anchor_coordinates() -> None:

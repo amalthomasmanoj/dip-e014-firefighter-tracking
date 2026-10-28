@@ -100,3 +100,20 @@ def test_live_hub_resolves_logical_responder_to_physical_uwb_node() -> None:
 
     assert hub.uwb_node_id("firefighter_1") == "dwm3000_tag_10"
     assert hub.uwb_node_id("unconfigured_tag") == "unconfigured_tag"
+
+
+def test_live_hub_reports_real_imu_freshness() -> None:
+    hub = LiveUdpStateHub(
+        LiveUwbRangeTracker(),
+        responders=(ResponderConfig("firefighter_1", "tag_1", "waist_1"),),
+    )
+
+    assert hub.sensor_status("firefighter_1", now_s=10.0) == {
+        "responder_id": "firefighter_1",
+        "imu_available": False,
+        "imu_age_s": None,
+    }
+    hub.process(event("waist_1", 10_000_000, 0.0))
+
+    assert hub.sensor_status("firefighter_1", now_s=10.5)["imu_available"] is True
+    assert hub.sensor_status("firefighter_1", now_s=11.1)["imu_available"] is False

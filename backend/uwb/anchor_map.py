@@ -70,6 +70,7 @@ class LiveAnchorMapTracker:
         movement_threshold_m: float = 0.25,
         movement_confirmation_sets: int = 3,
         allow_remap: bool = False,
+        use_configured_fallback: bool = False,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         if not configured_anchors:
@@ -106,6 +107,7 @@ class LiveAnchorMapTracker:
         self._movement_threshold_m = movement_threshold_m
         self._movement_confirmation_sets = movement_confirmation_sets
         self._allow_remap = allow_remap
+        self._use_configured_fallback = use_configured_fallback
         self._clock = clock
         self._windows: dict[tuple[str, str], deque[float]] = {
             pair: deque(maxlen=median_window) for pair in self._required_pairs
@@ -120,7 +122,9 @@ class LiveAnchorMapTracker:
 
     @property
     def anchors(self) -> tuple[Anchor, ...]:
-        return self._anchors or self._configured_anchors
+        if self._anchors is not None:
+            return self._anchors
+        return self._configured_anchors if self._use_configured_fallback else ()
 
     @property
     def map_version(self) -> int:

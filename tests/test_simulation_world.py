@@ -109,7 +109,7 @@ def test_simulation_endpoints_reject_non_simulation_sources(mode):
             )
         )
     assert error.value.status_code == 409
-    assert route(app, "/anchors")()[0]["x_m"] == 0
+    assert route(app, "/anchors")() == []
 
 
 def test_simulation_commands_and_shared_lifecycle():

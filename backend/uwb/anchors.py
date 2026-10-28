@@ -75,3 +75,12 @@ def anchors_from_env(env: Mapping[str, str] | None = None) -> tuple[Anchor, ...]
     environ = os.environ if env is None else env
     config_path = environ.get(ANCHORS_CONFIG_ENV_VAR)
     return load_anchors(config_path) if config_path else DEFAULT_ANCHORS
+
+
+def anchors_are_explicitly_configured(
+    env: Mapping[str, str] | None = None,
+) -> bool:
+    """Return whether live anchor coordinates came from a user configuration."""
+    environ = os.environ if env is None else env
+    config_path = environ.get(ANCHORS_CONFIG_ENV_VAR)
+    return bool(config_path and config_path.strip())

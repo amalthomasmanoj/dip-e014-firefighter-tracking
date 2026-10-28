@@ -8,6 +8,7 @@ from backend.api.live import LiveUdpStateHub
 from backend.ingestion.events import IngestedMeasurement
 from backend.ingestion.sequencing import SequenceStatus
 from backend.models.measurements import ImuMeasurement, UwbRangeMeasurement
+from backend.uwb.anchors import DEFAULT_ANCHORS
 from backend.uwb.live_ranges import LiveUwbRangeTracker
 
 
@@ -114,7 +115,7 @@ def test_live_hub_updates_ranges_before_position_is_solvable() -> None:
 
 def test_live_hub_keeps_two_tag_estimators_and_range_views_separate() -> None:
     tracker = LiveUwbRangeTracker(stale_after_s=1.0)
-    hub = LiveUdpStateHub(tracker)
+    hub = LiveUdpStateHub(tracker, DEFAULT_ANCHORS)
     messages: dict[str, dict] = {}
 
     tag_ranges = {
@@ -148,3 +149,19 @@ def test_live_hub_keeps_two_tag_estimators_and_range_views_separate() -> None:
     assert tracker.snapshot(now_s=10.1, node_id="dwm3000_tag_11")[
         "tag_node_id"
     ] == "dwm3000_tag_11"
+
+
+def test_live_hub_does_not_localize_without_an_anchor_map() -> None:
+    tracker = LiveUwbRangeTracker(stale_after_s=1.0)
+    hub = LiveUdpStateHub(tracker)
+
+    messages = [
+        hub.process(uwb_event(anchor_id, range_m, index, 10.0 + index * 0.01))
+        for index, (anchor_id, range_m) in enumerate(
+            (("A1", 1.4), ("A2", 7.1), ("A3", 5.1)),
+            start=1,
+        )
+    ]
+
+    assert messages == [None, None, None]
+    assert tracker.snapshot(now_s=10.1)["active_anchor_count"] == 3

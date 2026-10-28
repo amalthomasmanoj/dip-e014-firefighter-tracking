@@ -15,7 +15,11 @@ from backend.config.source import SourceMode, source_mode_from_env
 from backend.heart_rate.receiver import HeartRateReceiver
 from backend.simulation.world import SimulationWorld
 from backend.uwb.anchor_map import LiveAnchorMapTracker
-from backend.uwb.anchors import Anchor, anchors_from_env
+from backend.uwb.anchors import (
+    Anchor,
+    anchors_are_explicitly_configured,
+    anchors_from_env,
+)
 from backend.uwb.live_ranges import LiveUwbRangeTracker
 
 
@@ -40,15 +44,19 @@ def create_app(
 ) -> FastAPI:
     active_source_mode = source_mode or source_mode_from_env()
     configured_anchors = tuple(anchors) if anchors is not None else anchors_from_env()
+    has_explicit_anchor_map = anchors is not None or anchors_are_explicitly_configured()
     heart_rate = HeartRateReceiver.from_env()
     live_uwb_ranges = LiveUwbRangeTracker()
-    live_anchor_map = LiveAnchorMapTracker(configured_anchors)
+    live_anchor_map = LiveAnchorMapTracker(
+        configured_anchors,
+        use_configured_fallback=has_explicit_anchor_map,
+    )
     configured_responders = (
         tuple(responders) if responders is not None else responders_from_env()
     )
     live_hub = LiveUdpStateHub(
         live_uwb_ranges,
-        configured_anchors,
+        live_anchor_map.anchors,
         live_anchor_map,
         configured_responders,
     )
@@ -134,6 +142,10 @@ def create_app(
     @app.get("/uwb/anchor-map")
     def uwb_anchor_map() -> dict[str, object]:
         return live_anchor_map.snapshot()
+
+    @app.get("/responders/{responder_id}/sensor-status")
+    def responder_sensor_status(responder_id: str) -> dict[str, object]:
+        return live_hub.sensor_status(responder_id)
 
     @app.post("/responders/{responder_id}/heading-alignment")
     def align_heading(responder_id: str, alignment: HeadingAlignment) -> dict[str, object]:

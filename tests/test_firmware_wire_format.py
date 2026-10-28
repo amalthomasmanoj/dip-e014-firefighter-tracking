@@ -20,14 +20,16 @@ from tools.uwb.dwm3000_udp_adapter import (
 def firmware_sweep_bytes(
     timestamp_ms: int,
     tag_id: int,
-    anchors: list[tuple[str, float, float, float, float]],
+    anchors: list[tuple[str, float, float]],
+    *,
+    synthetic: bool = True,
 ) -> bytes:
     """Reproduce the firmware's snprintf output byte for byte."""
-    head = f'{{"t":{timestamp_ms},"tag_id":{tag_id},"anchors":{{'
+    synthetic_field = ',"synthetic":true' if synthetic else ""
+    head = f'{{"t":{timestamp_ms},"tag_id":{tag_id}{synthetic_field},"anchors":{{'
     body = ",".join(
-        f'"{anchor_id}":{{"distance":{distance_cm:.2f},"raw":{raw_cm:.2f},'
-        f'"rssi":{rssi:.2f},"fp_rssi":{fp_rssi:.2f}}}'
-        for anchor_id, distance_cm, raw_cm, rssi, fp_rssi in anchors
+        f'"{anchor_id}":{{"distance":{distance_cm:.2f},"raw":{raw_cm:.2f}}}'
+        for anchor_id, distance_cm, raw_cm in anchors
     )
     return (head + body + "}}").encode("utf-8")
 
@@ -37,10 +39,10 @@ def test_full_firmware_sweep_parses_and_converts() -> None:
         12345,
         10,
         [
-            ("A1", 150.23, 151.07, -80.12, -82.34),
-            ("A2", 210.55, 211.01, -81.00, -83.20),
-            ("A3", 305.90, 306.44, -84.50, -86.10),
-            ("A4", 412.08, 412.63, -86.75, -88.90),
+            ("A1", 150.23, 151.07),
+            ("A2", 210.55, 211.01),
+            ("A3", 305.90, 306.44),
+            ("A4", 412.08, 412.63),
         ],
     )
 
@@ -55,7 +57,7 @@ def test_full_firmware_sweep_parses_and_converts() -> None:
         pytest.approx(3.0590),
         pytest.approx(4.1208),
     ]
-    assert {packet["node_id"] for packet in packets} == {"dwm3000_tag_10"}
+    assert {packet["node_id"] for packet in packets} == {"dwm3000_sim_tag_10"}
 
 
 def test_firmware_skips_silent_anchors_without_padding() -> None:
@@ -63,7 +65,7 @@ def test_firmware_skips_silent_anchors_without_padding() -> None:
     payload = firmware_sweep_bytes(
         900,
         10,
-        [("A1", 150.00, 150.00, -80.00, -82.00), ("A4", 412.08, 412.63, -86.75, -88.90)],
+        [("A1", 150.00, 150.00), ("A4", 412.08, 412.63)],
     )
 
     sweep = parse_dwm3000_sweep(payload)
@@ -72,7 +74,7 @@ def test_firmware_skips_silent_anchors_without_padding() -> None:
 
 
 def test_single_anchor_sweep_is_still_valid_transport() -> None:
-    payload = firmware_sweep_bytes(1, 10, [("A1", 150.00, 150.00, -80.00, -82.00)])
+    payload = firmware_sweep_bytes(1, 10, [("A1", 150.00, 150.00)])
 
     assert len(parse_dwm3000_sweep(payload).anchors) == 1
 
@@ -91,25 +93,39 @@ def test_sweep_with_no_responding_anchors_is_rejected() -> None:
 )
 def test_anchor_ids_outside_the_pattern_are_rejected(anchor_id: str) -> None:
     """The firmware's ANCHOR_IDS entries must be A<digits>, uppercase."""
-    payload = firmware_sweep_bytes(1, 10, [(anchor_id, 150.0, 150.0, -80.0, -82.0)])
+    payload = firmware_sweep_bytes(1, 10, [(anchor_id, 150.0, 150.0)])
 
     with pytest.raises(Dwm3000SweepError):
         parse_dwm3000_sweep(payload)
 
 
-def test_diagnostics_fields_are_mandatory() -> None:
-    """Dropping rssi/fp_rssi from the firmware breaks the whole sweep."""
+def test_signal_diagnostics_are_optional() -> None:
+    """Hardware without validated signal diagnostics still carries ranges."""
     payload = (
         b'{"t":1,"tag_id":10,"anchors":{"A1":{"distance":150.00,"raw":150.00}}}'
     )
 
-    with pytest.raises(Dwm3000SweepError):
-        parse_dwm3000_sweep(payload)
+    sample = parse_dwm3000_sweep(payload).anchors[0]
+    assert sample.rssi_dbm is None
+    assert sample.fp_rssi_dbm is None
+
+
+def test_authoritative_firmware_defaults_to_real_node_identity() -> None:
+    payload = firmware_sweep_bytes(
+        1,
+        10,
+        [("A1", 150.0, 150.0)],
+        synthetic=False,
+    )
+
+    packets = generic_packets_from_sweep(parse_dwm3000_sweep(payload), 0)
+
+    assert packets[0]["node_id"] == "dwm3000_tag_10"
 
 
 def test_centimetre_to_metre_conversion_is_the_adapter_s_job() -> None:
     """The firmware sends centimetres; nothing on the device converts."""
-    payload = firmware_sweep_bytes(1, 10, [("A1", 100.00, 100.00, -80.0, -82.0)])
+    payload = firmware_sweep_bytes(1, 10, [("A1", 100.00, 100.00)])
 
     packets = generic_packets_from_sweep(parse_dwm3000_sweep(payload), 0)
 

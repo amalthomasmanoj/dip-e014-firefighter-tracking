@@ -34,7 +34,7 @@
 #define TX_ANT_DLY 16385
 #define RX_ANT_DLY 16385
 
-// Set to 1 once real DW3000 ranging is implemented in rangeToAnchor().
-// Leaving it 0 streams synthetic distances so the Wi-Fi, JSON, adapter,
-// backend and UI path can be proven before the radio works.
+// This repository sketch is a transport fixture, not the project's
+// authoritative tag-v3 implementation. Leave this at 0. A value of 1 only
+// exposes an intentionally unimplemented library-integration seam.
 #define USE_REAL_RANGING 0

@@ -5,9 +5,14 @@ is production firmware and nothing here belongs under `firmware/wearable_node/`
 or `firmware/anchor_node/` yet.
 
 ```text
-esp32_dwm3000_tag/      ranges against anchors, sends sweeps on UDP 7007
-esp32_dwm3000_anchor/   UWB responder only, no Wi-Fi, no laptop traffic
+esp32_dwm3000_tag/      synthetic UDP transport fixture
+esp32_dwm3000_anchor/   non-functional library-integration reference
 ```
+
+These sketches are not the project firmware. The existing tag-v3 and
+anchor-v2 sources remain authoritative for real ranging and anchor surveys.
+Nothing in this directory should be used to record an experiment as hardware
+data.
 
 ## Before You Flash: Is This Even Needed?
 
@@ -67,20 +72,21 @@ and make the tag's `ANCHOR_IDS` / `ANCHOR_ADDRS` lists agree with them. The
 label strings must also match `anchor_id` in your
 `backend/config/anchors.local.yaml`.
 
-## Wire Format (Verified Against The Adapter)
+## Synthetic Wire Format (Verified Against The Adapter)
 
 The tag emits one UDP datagram per sweep to port 7007, distances in
 **centimetres**:
 
 ```json
-{"t":12345,"tag_id":10,"anchors":{
-  "A1":{"distance":150.23,"raw":151.07,"rssi":-80.12,"fp_rssi":-82.34}}}
+{"t":12345,"tag_id":10,"synthetic":true,"anchors":{
+  "A1":{"distance":150.23,"raw":151.07}}}
 ```
 
 `tests/test_firmware_wire_format.py` reproduces this formatting and pushes it
 through the real parser. Rules the adapter enforces:
 
-- `rssi` and `fp_rssi` are **required**, not optional.
+- `rssi` and `fp_rssi` are optional. Do not fabricate them when the selected
+  DWM3000 path does not expose validated diagnostics.
 - Anchor IDs must match `A<digits>`, uppercase. `a1` and `ANCHOR1` are
   rejected.
 - Distances must be numeric and non-negative. Never send a string.
@@ -94,9 +100,9 @@ to metres. Do not convert on the device.
 
 ## Bring-Up Order
 
-Prove the transport before the radio. The tag ships with
-`USE_REAL_RANGING 0`, which streams synthetic distances so every other link
-in the chain can be verified first.
+Prove the transport before the radio. The fixture ships with
+`USE_REAL_RANGING 0`. Its packets carry `"synthetic": true`, and the adapter
+maps them to `dwm3000_sim_tag_<id>` so they cannot be mistaken for tag-v3 data.
 
 1. **Flash the tag with `USE_REAL_RANGING 0`.** Watch the serial log at
    115200 for a Wi-Fi connection and a sweep line.
@@ -108,10 +114,9 @@ in the chain can be verified first.
    point the whole laptop-side path is proven.
 4. **Flash the anchors.** Identify each board by its boot label over USB
    serial and write the label on the board physically.
-5. **Implement `rangeToAnchor()`** from your DW3000 library's SS-TWR
-   initiator example, and the anchor's responder loop from the matching
-   responder example. Set `USE_REAL_RANGING 1`.
-6. **Calibrate antenna delay.** Place the tag at a tape-measured distance and
+5. **Switch to the authoritative tag-v3/anchor-v2 firmware** for real radio
+   work. Do not turn this fixture into a second production implementation.
+6. **Calibrate antenna delay in the authoritative firmware.** Place the tag at a tape-measured distance and
    adjust `TX_ANT_DLY`/`RX_ANT_DLY` until the reported range matches. This is
    the largest systematic error in a DW3000 setup; uncalibrated boards are
    routinely tens of centimetres out.
@@ -121,11 +126,11 @@ in the chain can be verified first.
 
 ## Known Gaps
 
-- `rangeToAnchor()` and the anchor responder loop are not implemented here.
-  They are library-specific and must come from your DW3000 library's own
-  examples.
+- `rangeToAnchor()` and the anchor responder loop are deliberately not
+  implemented here. These files only preserve the electrical and integration
+  seams used during transport bring-up.
 - The sweep carries tag-to-anchor ranges only. Anchor-to-anchor ranging,
   which `docs/anchor_to_anchor_ranging_requirements.md` specifies, is not
   supported by this firmware.
-- `rssi` and `fp_rssi` are transported but deliberately not mapped to the
-  contract's `quality` field; no validated conversion exists.
+- Signal diagnostics are not emitted by the fixture because their hardware
+  availability and meaning have not been validated.

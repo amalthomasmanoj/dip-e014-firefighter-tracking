@@ -6,12 +6,13 @@
 // parser. Do not change field names, units, or anchor ID spelling without
 // changing the adapter and its tests together.
 //
-// Emitted payload, distances in CENTIMETRES:
-//   {"t":12345,"tag_id":10,"anchors":{
-//      "A1":{"distance":150.23,"raw":151.07,"rssi":-80.12,"fp_rssi":-82.34}}}
+// Emitted transport-fixture payload, distances in CENTIMETRES:
+//   {"t":12345,"tag_id":10,"synthetic":true,"anchors":{
+//      "A1":{"distance":150.23,"raw":151.07}}}
 //
-// The adapter rejects a sweep that omits rssi or fp_rssi, uses an anchor ID
-// outside A<digits>, sends a distance as a string, sends a negative
+// Signal diagnostics are intentionally omitted: their availability has not
+// been confirmed on the project hardware. The adapter rejects an anchor ID
+// outside A<digits>, a distance sent as a string, a negative
 // distance, or has an empty anchors object.
 
 #include <WiFi.h>
@@ -45,8 +46,6 @@ static char payload[768];
 struct RangeResult {
   float distance_cm; // filtered/corrected range reported to the backend
   float raw_cm;      // uncorrected range, preserved for diagnostics
-  float rssi_dbm;
-  float fp_rssi_dbm;
 };
 
 // ---------------------------------------------------------------------------
@@ -64,8 +63,7 @@ struct RangeResult {
 //   2. poll the status register for RX good or timeout/error
 //   3. on good RX: dwt_readrxdata(), recover poll TX and response RX
 //      timestamps, compute time-of-flight, multiply by SPEED_OF_LIGHT
-//   4. read diagnostics for RSSI and first-path RSSI
-//   5. on timeout/error: dwt_rxreset() and return false
+  //   4. on timeout/error: dwt_rxreset() and return false
 //
 // Keep the per-anchor timeout short (a few ms). ANCHOR_COUNT timeouts in a
 // row must still fit inside SWEEP_PERIOD_MS.
@@ -85,8 +83,6 @@ static bool rangeToAnchor(uint16_t anchor_addr, RangeResult &out) {
   const float wobble_cm = 25.0f * sinf((float)millis() / 1000.0f + anchor_addr);
   out.raw_cm = base_cm + wobble_cm;
   out.distance_cm = out.raw_cm;
-  out.rssi_dbm = -80.0f;
-  out.fp_rssi_dbm = -82.0f;
   return true;
 #endif
 }
@@ -177,7 +173,7 @@ void loop() {
   // never substitute a zero or a stale distance.
   int offset = 0;
   offset += snprintf(payload + offset, sizeof(payload) - offset,
-                     "{\"t\":%lu,\"tag_id\":%d,\"anchors\":{",
+                     "{\"t\":%lu,\"tag_id\":%d,\"synthetic\":true,\"anchors\":{",
                      (unsigned long)sweep_start_ms, TAG_ID);
 
   int responded = 0;
@@ -190,10 +186,9 @@ void loop() {
       continue; // the adapter rejects negative distances outright
     }
     offset += snprintf(payload + offset, sizeof(payload) - offset,
-                       "%s\"%s\":{\"distance\":%.2f,\"raw\":%.2f,"
-                       "\"rssi\":%.2f,\"fp_rssi\":%.2f}",
+                       "%s\"%s\":{\"distance\":%.2f,\"raw\":%.2f}",
                        responded ? "," : "", kAnchorIds[i], result.distance_cm,
-                       result.raw_cm, result.rssi_dbm, result.fp_rssi_dbm);
+                       result.raw_cm);
     responded++;
   }
   offset += snprintf(payload + offset, sizeof(payload) - offset, "}}");

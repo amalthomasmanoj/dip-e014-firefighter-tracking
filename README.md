@@ -171,6 +171,14 @@ for the interfaces, the test path, and the IMU wiring/firmware steps.
 Display real Bluetooth heart rate independently of localization, including while
 the map runs in simulation. See [MacBook setup](docs/heart_rate.md).
 
+## Firmware
+
+A synthetic ESP32 transport fixture lives in
+[firmware/lab_bringup/](firmware/lab_bringup/README.md), together with its
+wiring map and verified test wire format. It is not functional ranging
+firmware: the existing external tag-v3/anchor-v2 sources remain authoritative
+for hardware experiments and anchor surveys.
+
 ## Architecture
 
 Start with [docs/architecture.md](docs/architecture.md), [docs/coordinate_frames.md](docs/coordinate_frames.md), and [contracts/README.md](contracts/README.md).

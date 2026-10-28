@@ -18,7 +18,20 @@ additional anchors = solved relative to the established anchors
 This is relative indoor positioning. It does not provide latitude/longitude or
 an absolute building coordinate without an additional surveyed transform.
 
-## What Is Needed From The Hardware/Firmware Owner
+## Confirmed Anchor-v2 Capability
+
+The supplied anchor-v2 source confirms that anchors can act as both DS-TWR
+responders and survey initiators. Stage 5 asks an anchor to range to the target
+ID in byte 4. Stage 6 returns the target, success, uint16 millimetres, RSSI gap,
+and negated RSSI to the commanding tag. The backend and DWM3000 adapter now
+consume these results as `uwb_pair_range` measurements.
+
+The supplied tag-v3 source now issues stage-5 commands, decodes stage-6 results,
+and forwards them in the documented adapter JSON. Both updated sketches must be
+flashed; the previous live capture contained only `anchors`, which proves the
+older tag firmware was still running during that test.
+
+## What Is Still Needed From The Hardware/Firmware Owner
 
 ### 1. Actual Firmware Source
 
@@ -47,8 +60,8 @@ For every node, provide:
 - whether changing initiator/responder roles is supported by the current
   firmware and library.
 
-Do not assume that an anchor can initiate anchor-to-anchor ranging until this
-is confirmed on the real firmware.
+Anchor initiator/responder role switching is confirmed by the supplied source;
+it still needs an on-hardware timing and collision test.
 
 ### 3. Current UWB Schedule And Protocol
 
@@ -83,13 +96,14 @@ The current observed message contains tag-to-anchor ranges only:
   "t": 123456,
   "tag_id": 10,
   "anchors": {
-    "A1": {"distance": 150.0, "raw": 150.0, "rssi": -80.0, "fp_rssi": -82.0},
-    "A2": {"distance": 210.0, "raw": 210.0, "rssi": -81.0, "fp_rssi": -83.0}
+    "A1": {"distance": 150.0, "raw": 150.0},
+    "A2": {"distance": 210.0, "raw": 210.0}
   }
 }
 ```
 
-That message alone cannot reveal anchor-to-anchor distances or instantaneous
+Signal-diagnostic fields may be added when the hardware path exposes validated
+values, but consumers must not require them. That message alone cannot reveal anchor-to-anchor distances or instantaneous
 anchor coordinates.
 
 ### 5. Physical Test Information
@@ -138,8 +152,8 @@ be replaced by filtered values.
 
 ## Proposed Measurement Information
 
-The final wire representation is not approved yet. A pairwise measurement must
-at least carry:
+The generic laptop packet is now the additive `uwb_pair_range` v1 type. It
+carries:
 
 ```text
 measurement timestamp in integer microseconds
@@ -151,7 +165,7 @@ valid/invalid flag
 optional hardware diagnostics only when confirmed and documented
 ```
 
-Illustrative payload only:
+Contract payload:
 
 ```json
 {
@@ -163,14 +177,17 @@ Illustrative payload only:
   "data": {
     "peer_id": "A2",
     "range_m": 1.967,
-    "valid": true
+    "valid": true,
+    "rssi_gap_db": 5.0,
+    "rssi_dbm": -78.0
   }
 }
 ```
 
-This example is not yet part of `contracts/**`. Changing the protected packet
-contract requires coordinated producer, parser, consumer, test, and breaking-
-change documentation updates.
+This additive packet type is in `contracts/packet_schema.json`. The edge
+producer is `tools/uwb/dwm3000_udp_adapter.py`; the parser, map consumer,
+example, and tests are updated together. Existing IMU and tag-range packets
+remain compatible with packet version 1.
 
 ## Relative Coordinate Solution
 
@@ -222,22 +239,23 @@ A2 moves, the frame rotation and scale baseline change. The UI and tag
 trajectory must handle those frame changes explicitly instead of displaying a
 false tag movement.
 
-## Laptop-Side Work After Firmware Is Available
+## Implemented Laptop-Side Path
 
-The implementation will require coordinated changes to:
+The current implementation includes:
 
-- hardware-edge adapter for the confirmed pairwise packet format;
-- typed measurement model and parser;
-- sequencing and stale-measurement handling;
-- raw logging/replay channels;
-- pairwise range outlier rejection;
-- relative anchor-coordinate estimator;
-- per-tag estimator state for tag 10, tag 11, and later tags;
-- `/anchors` API so coordinates can update at runtime;
-- WebSocket state or a separate anchor-state stream;
-- Cartesian and digital-twin anchor updates;
-- unit, integration, replay, and frontend tests;
-- packet-contract and breaking-change documentation.
+- adapter decoding for the confirmed stage-6 values forwarded as tag JSON;
+- a typed `uwb_pair_range` measurement and parser;
+- separate raw, filtered, and accepted pair-range state;
+- median filtering, triangle validation, and sustained movement confirmation;
+- relative coordinates with A1 at the origin and A2 on positive x;
+- atomic map versions and tag estimator reset when the map changes;
+- dynamic `/anchors` and diagnostic `/uwb/anchor-map` responses;
+- live Cartesian/digital-twin coordinate and pair-link refresh;
+- contract, adapter, solver, movement, and stale-data tests.
+
+Raw replay remains available through the adapter's append-only JSONL capture.
+Live tags have independent range windows, estimators, trajectories, and UI
+selection. A robust four-or-more-anchor solver remains follow-up work.
 
 The UI must only render coordinates produced by the backend. It must not
 perform anchor localization or tag trilateration.
@@ -279,9 +297,9 @@ perform anchor localization or tag trilateration.
   replaced with impossible coordinates.
 - Confirm raw measurements remain available for replay.
 
-## Immediate Next Step
+## Immediate Hardware Step
 
-Provide the exact ESP32/DWM3000 firmware project currently flashed on the
-anchors and tag. After reviewing its ranging roles and timing schedule, the
-pairwise ranging design can be finalized without inventing unsupported hardware
-behavior.
+Flash the corrected anchor-v2 and tag-v3 sketches, using unique anchor and tag
+IDs, then confirm the tag forwards all three stage-5 pair results using the JSON
+in `tools/uwb/README.md`. Capture stationary and moved-anchor datasets to
+validate timing, RF accuracy, the 0.25 m movement threshold, and recovery.

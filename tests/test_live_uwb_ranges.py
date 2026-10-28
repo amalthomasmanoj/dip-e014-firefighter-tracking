@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from backend.api.live import LiveUdpStateHub
@@ -26,11 +28,12 @@ def uwb_event(
     arrival_time_s: float,
     *,
     valid: bool = True,
+    node_id: str = "dwm3000_tag_10",
 ) -> IngestedMeasurement:
     return IngestedMeasurement(
         measurement=UwbRangeMeasurement(
             timestamp_us=sequence_number * 1_000,
-            node_id="dwm3000_tag_10",
+            node_id=node_id,
             sequence_number=sequence_number,
             anchor_id=anchor_id,
             range_m=range_m,
@@ -107,3 +110,41 @@ def test_live_hub_updates_ranges_before_position_is_solvable() -> None:
     snapshot = tracker.snapshot(now_s=10.1)
     assert snapshot["tag_present"] is True
     assert snapshot["active_anchor_count"] == 1
+
+
+def test_live_hub_keeps_two_tag_estimators_and_range_views_separate() -> None:
+    tracker = LiveUwbRangeTracker(stale_after_s=1.0)
+    hub = LiveUdpStateHub(tracker)
+    messages: dict[str, dict] = {}
+
+    tag_ranges = {
+        "dwm3000_tag_10": (1.4142, 7.0711, 5.0990),
+        "dwm3000_tag_11": (5.0, 5.0, 5.0),
+    }
+    sequence_number = 1
+    for node_id, ranges in tag_ranges.items():
+        for anchor_id, range_m in zip(("A1", "A2", "A3"), ranges, strict=True):
+            message = hub.process(
+                uwb_event(
+                    anchor_id,
+                    range_m,
+                    sequence_number,
+                    10.0 + sequence_number * 0.01,
+                    node_id=node_id,
+                )
+            )
+            sequence_number += 1
+            if message is not None:
+                decoded = json.loads(message)
+                messages[decoded["node_id"]] = decoded
+
+    assert set(messages) == {"dwm3000_tag_10", "dwm3000_tag_11"}
+    assert messages["dwm3000_tag_10"]["state"]["position_m"] != messages[
+        "dwm3000_tag_11"
+    ]["state"]["position_m"]
+    assert tracker.snapshot(now_s=10.1, node_id="dwm3000_tag_10")[
+        "tag_node_id"
+    ] == "dwm3000_tag_10"
+    assert tracker.snapshot(now_s=10.1, node_id="dwm3000_tag_11")[
+        "tag_node_id"
+    ] == "dwm3000_tag_11"

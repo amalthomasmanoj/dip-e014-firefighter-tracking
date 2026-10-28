@@ -3,6 +3,7 @@ import { useEffect, useRef, type MutableRefObject } from "react";
 import * as THREE from "three";
 import {
   Anchor,
+  BackendSource,
   EstimatedState,
   LiveUwbSnapshot,
   UwbRangeReading,
@@ -16,6 +17,7 @@ type Props = {
   usableAnchorCount: number;
   firefighters?: FirefighterTrack[];
   anchorLinks?: AnchorLink[];
+  source?: BackendSource | null;
 };
 
 type AvatarParts = {
@@ -436,6 +438,7 @@ export function DigitalTwinView({
   usableAnchorCount,
   firefighters,
   anchorLinks,
+  source,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stateRef = useRef(state);
@@ -724,7 +727,7 @@ export function DigitalTwinView({
       <div className="twin-header">
         <h2>Digital Twin</h2>
         <span className="twin-activity">
-          {firefighters ? `${firefighters.length} firefighters · simulation` : state
+          {firefighters ? `${firefighters.length} firefighters · ${source === "live" ? "live" : "simulation"}` : state
             ? state.activity.posture === "lying_down"
               ? `LYING DOWN · ${state.activity.motion}`
               : `${state.activity.posture} ${state.activity.motion}`

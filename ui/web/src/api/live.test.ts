@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { appendLiveTrack } from "./live";
-import { EstimatedState, StateMessage } from "../types/state";
+import { appendLiveTrack, detectedLiveAnchors } from "./live";
+import { Anchor, EstimatedState, LiveAnchorLink, StateMessage } from "../types/state";
 
 function state(x: number): EstimatedState {
   return {
@@ -36,5 +36,46 @@ describe("live tag tracks", () => {
       .toHaveLength(1);
     expect(tracks.find((track) => track.node_id === "dwm3000_tag_11")?.state?.position_m.x)
       .toBe(5);
+  });
+});
+
+describe("live anchor visibility", () => {
+  const anchors: Anchor[] = [
+    { anchor_id: "A1", x_m: 0, y_m: 0, z_m: 0 },
+    { anchor_id: "A2", x_m: 8, y_m: 0, z_m: 0 },
+    { anchor_id: "A3", x_m: 0, y_m: 6, z_m: 0 },
+  ];
+
+  it("hides configured anchors until a fresh hardware signal names them", () => {
+    expect(detectedLiveAnchors(anchors, [], [])).toEqual([]);
+
+    const detected = detectedLiveAnchors(
+      anchors,
+      [{ anchor_id: "A1", range_m: 2.8, measurement_timestamp_us: 1, age_s: 0.1 }],
+      [],
+    );
+
+    expect(detected.map((anchor) => anchor.anchor_id)).toEqual(["A1"]);
+  });
+
+  it("shows both ends of a fresh valid anchor survey but not stale links", () => {
+    const link = (overrides: Partial<LiveAnchorLink>): LiveAnchorLink => ({
+      initiator_id: "A1",
+      responder_id: "A3",
+      timestamp_us: 1,
+      sequence_number: 1,
+      raw_range_m: 6,
+      filtered_range_m: 6,
+      valid: true,
+      accepted: false,
+      age_s: 0.2,
+      rssi_gap_db: null,
+      rssi_dbm: null,
+      ...overrides,
+    });
+
+    expect(detectedLiveAnchors(anchors, [], [link({})]).map((anchor) => anchor.anchor_id))
+      .toEqual(["A1", "A3"]);
+    expect(detectedLiveAnchors(anchors, [], [link({ age_s: 6 })])).toEqual([]);
   });
 });

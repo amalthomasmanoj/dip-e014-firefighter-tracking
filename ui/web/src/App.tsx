@@ -8,7 +8,7 @@ import {
   fetchLiveUwbRanges,
 } from "./api/backend";
 import { connectStateStream } from "./api/websocket";
-import { appendLiveTrack } from "./api/live";
+import { appendLiveTrack, detectedLiveAnchors } from "./api/live";
 import { BuildingMap } from "./components/BuildingMap/BuildingMap";
 import { DigitalTwinView } from "./components/DigitalTwinView";
 import { ExperimentPlot } from "./components/ExperimentPlot";
@@ -197,7 +197,13 @@ export default function App() {
     return () => { disposed = true; window.clearTimeout(timer); };
   }, [source]);
 
-  const activeAnchors = source === "simulation" && simulation ? simulation.anchors : anchors;
+  const visibleLiveAnchors = useMemo(
+    () => detectedLiveAnchors(anchors, liveUwb.ranges, liveAnchorMap.links),
+    [anchors, liveAnchorMap.links, liveUwb.ranges],
+  );
+  const activeAnchors = source === "simulation" && simulation
+    ? simulation.anchors
+    : source === "live" ? visibleLiveAnchors : anchors;
   const activeTracks = source === "simulation"
     ? tracks
     : source === "live" ? liveTracks : undefined;

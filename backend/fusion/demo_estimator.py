@@ -12,7 +12,6 @@ from backend.imu.heading import (
     HeadingEstimator,
     heading_to_quaternion_xyzw,
 )
-from backend.imu.zupt_detector import detect_zupt_window
 from backend.models.measurements import ImuMeasurement, Measurement, UwbRangeMeasurement
 from backend.models.state import (
     ActivityState,
@@ -187,6 +186,13 @@ class DemoSensorEstimator:
             sigma_y_m=sigma_y_m,
         )
 
+    def align_heading(self, heading_rad: float) -> None:
+        align = getattr(self._heading_estimator, "align", None)
+        if align is None:
+            raise ValueError("configured heading estimator does not support alignment")
+        align(heading_rad)
+        self._yaw_rad = heading_rad
+
     def _build_state(
         self,
         *,
@@ -200,8 +206,7 @@ class DemoSensorEstimator:
         sigma_x_m: float,
         sigma_y_m: float,
     ) -> EstimatedState:
-        zupt_active = detect_zupt_window(self._imu_window) if self._imu_window else False
-        activity = self._activity_state(speed_mps=speed_mps, zupt_active=zupt_active)
+        activity = self._activity_state(speed_mps=speed_mps, zupt_active=False)
 
         return EstimatedState(
             timestamp_us=timestamp_us,
@@ -214,7 +219,7 @@ class DemoSensorEstimator:
                 sigma_z_m=1.0,
             ),
             status=SensorStatus(
-                zupt_active=zupt_active,
+                zupt_active=False,
                 uwb_available=bool(fresh_ranges),
                 active_anchor_count=len(fresh_ranges),
             ),

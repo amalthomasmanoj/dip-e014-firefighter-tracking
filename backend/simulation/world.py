@@ -21,7 +21,7 @@ class SimulatedFirefighter:
     label: str
     x_m: float
     y_m: float
-    crouching: bool = False
+    lying_down: bool = False
     moving_until_us: int = 0
     sequence_number: int = 0
 
@@ -87,9 +87,9 @@ class SimulationWorld:
         for estimator in self._estimators.values():
             estimator.set_anchors(updated)
 
-    def toggle_crouch(self, node_id: str) -> None:
+    def toggle_lying(self, node_id: str) -> None:
         tag = self.firefighters[node_id]
-        tag.crouching = not tag.crouching
+        tag.lying_down = not tag.lying_down
 
     def step(self) -> dict:
         self.timestamp_us += 100_000
@@ -114,9 +114,9 @@ class SimulationWorld:
         for node_id, tag in self.firefighters.items():
             moving = self.timestamp_us < tag.moving_until_us
             data = {
-                "ax_mps2": 7.0 if tag.crouching else (0.5 if moving else 0.0),
+                "ax_mps2": 9.81 if tag.lying_down else (0.5 if moving else 0.0),
                 "ay_mps2": 0.0,
-                "az_mps2": 7.0 if tag.crouching else 9.81,
+                "az_mps2": 0.0 if tag.lying_down else 9.81,
                 "gx_radps": 0.0,
                 "gy_radps": 0.0,
                 "gz_radps": 0.1 if moving else 0.0,

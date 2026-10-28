@@ -47,6 +47,7 @@ def test_websocket_schema_accepts_estimated_state_message() -> None:
         {
             "type": "estimated_state",
             "source": "simulation",
+            "node_id": "firefighter_1",
             "state": load_json(CONTRACTS / "examples" / "estimated_state.json"),
         }
     )

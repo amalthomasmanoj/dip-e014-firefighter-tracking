@@ -150,7 +150,7 @@ def test_unknown_nodes_and_invalid_actions_do_not_mutate_world():
         for request, status in [
             (SimulationCommand(kind="anchor", node_id="missing"), 404),
             (SimulationCommand(kind="firefighter", node_id="missing"), 404),
-            (SimulationCommand(kind="anchor", node_id="A1", action="toggle_crouch"), 422),
+            (SimulationCommand(kind="anchor", node_id="A1", action="toggle_lying"), 422),
         ]:
             with pytest.raises(HTTPException) as error:
                 await command(request)

@@ -44,8 +44,8 @@ def test_standing_scenario_reports_standing() -> None:
     assert final_state_for("standing").activity.posture == "standing"
 
 
-def test_crouching_scenario_reports_crouching() -> None:
-    assert final_state_for("crouching").activity.posture == "crouching"
+def test_crouching_scenario_remains_upright_for_waist_classifier() -> None:
+    assert final_state_for("crouching").activity.posture == "standing"
 
 
 def test_lying_down_scenario_reports_lying_down() -> None:

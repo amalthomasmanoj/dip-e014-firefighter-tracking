@@ -33,7 +33,7 @@ def test_wrap_to_pi_normalizes_full_turns() -> None:
 
 
 def test_integrator_accumulates_constant_yaw_rate() -> None:
-    integrator = GyroYawIntegrator()
+    integrator = GyroYawIntegrator(calibration_samples=0)
     # 1 rad/s for 1 s in 10 steps
     integrator.update(imu_sample(0, 1.0))
     for step in range(1, 11):
@@ -43,7 +43,7 @@ def test_integrator_accumulates_constant_yaw_rate() -> None:
 
 
 def test_integrator_wraps_past_half_turn() -> None:
-    integrator = GyroYawIntegrator()
+    integrator = GyroYawIntegrator(calibration_samples=0)
     integrator.update(imu_sample(0, math.pi))
     heading = integrator.update(imu_sample(400_000, math.pi))
 
@@ -55,7 +55,7 @@ def test_integrator_wraps_past_half_turn() -> None:
 
 
 def test_integrator_ignores_non_monotonic_samples() -> None:
-    integrator = GyroYawIntegrator()
+    integrator = GyroYawIntegrator(calibration_samples=0)
     integrator.update(imu_sample(1_000_000, 1.0))
     integrator.update(imu_sample(1_100_000, 1.0))
     before = integrator.heading_rad
@@ -66,7 +66,7 @@ def test_integrator_ignores_non_monotonic_samples() -> None:
 
 
 def test_integrator_skips_integration_across_long_dropout() -> None:
-    integrator = GyroYawIntegrator(max_dt_s=0.5)
+    integrator = GyroYawIntegrator(max_dt_s=0.5, calibration_samples=0)
     integrator.update(imu_sample(0, 1.0))
     integrator.update(imu_sample(2_000_000, 1.0))
 
@@ -74,12 +74,36 @@ def test_integrator_skips_integration_across_long_dropout() -> None:
 
 
 def test_reset_returns_to_initial_heading() -> None:
-    integrator = GyroYawIntegrator(initial_heading_rad=0.5)
+    integrator = GyroYawIntegrator(initial_heading_rad=0.5, calibration_samples=0)
     integrator.update(imu_sample(0, 1.0))
     integrator.update(imu_sample(100_000, 1.0))
     integrator.reset()
 
     assert integrator.heading_rad == pytest.approx(0.5)
+
+
+def test_stationary_window_calibrates_gyro_bias_before_integration() -> None:
+    integrator = GyroYawIntegrator(calibration_samples=3)
+    for timestamp in (0, 20_000, 40_000):
+        integrator.update(imu_sample(timestamp, 0.04))
+
+    assert integrator.calibrated is True
+    assert integrator.gyro_bias_radps == pytest.approx(0.04)
+
+    integrator.update(imu_sample(140_000, 1.04))
+    assert integrator.heading_rad == pytest.approx(0.1)
+
+
+def test_alignment_keeps_bias_and_sets_world_heading() -> None:
+    integrator = GyroYawIntegrator(calibration_samples=1)
+    integrator.update(imu_sample(0, 0.02))
+
+    integrator.align(math.pi / 2)
+    integrator.update(imu_sample(100_000, 0.02))
+    integrator.update(imu_sample(200_000, 1.02))
+
+    assert integrator.calibrated is True
+    assert integrator.heading_rad == pytest.approx(math.pi / 2 + 0.1)
 
 
 def test_heading_quaternion_round_trips_through_atan2() -> None:

@@ -56,8 +56,11 @@ def _segments_for(scenario: Scenario) -> list[tuple[str, float, float, float]]:
     if scenario == "lying_down":
         return [("lying_down", 6.0, 0.0, 0.0)]
     if scenario == "turn":
-        # a full 360-degree turn at 45 deg/s, walking throughout
-        return [("standing", 8.0, math.radians(45.0), 1.6)]
+        # Calibrate while still, then make a full 360-degree turn at 45 deg/s.
+        return [
+            ("standing", 2.0, 0.0, 0.0),
+            ("standing", 8.0, math.radians(45.0), 1.6),
+        ]
     if scenario == "fall":
         return [
             ("standing", 4.0, 0.0, 1.6),

@@ -32,12 +32,14 @@ def test_truncated(packet):
 def test_freshness_and_contact(monkeypatch):
     clock = [100.0]
     monkeypatch.setattr(hr.time, "monotonic", lambda: clock[0])
-    receiver = hr.HeartRateReceiver("sensor", "Min")
+    receiver = hr.HeartRateReceiver("sensor", "Min", responder_id="firefighter_1")
     receiver.status = "connected"
     assert receiver.snapshot()["status"] == "waiting"
     receiver.receive(None, bytearray([6, 72]))
     receiver.receive(None, bytearray([1]))  # malformed packet cannot replace a reading
     assert receiver.snapshot()["bpm"] == 72
+    assert receiver.snapshot()["responder_id"] == "firefighter_1"
+    assert receiver.snapshot()["received_timestamp_us"] is not None
     clock[0] += 6
     assert receiver.snapshot()["status"] == "stale"
     assert receiver.snapshot()["bpm"] is None
@@ -56,6 +58,14 @@ def test_endpoint_independent_of_localization(monkeypatch):
     route = next(r for r in app.routes if getattr(r, "path", None) == "/heart-rate")
     assert route.endpoint()["status"] == "disabled"
     assert route.endpoint()["bpm"] is None
+    assert route.endpoint()["responder_id"] is None
+
+
+def test_configured_device_requires_responder_assignment():
+    receiver = hr.HeartRateReceiver("sensor-id")
+    snapshot = receiver.snapshot()
+    assert snapshot["status"] == "error"
+    assert "E014_HR_RESPONDER_ID" in snapshot["error"]
 
 
 def test_reconnect_and_shutdown(monkeypatch):
@@ -93,7 +103,7 @@ def test_reconnect_and_shutdown(monkeypatch):
             sys.modules, "bleak", SimpleNamespace(BleakScanner=Scanner, BleakClient=Client)
         )
         monkeypatch.setattr(hr.asyncio, "sleep", retry_immediately)
-        receiver = hr.HeartRateReceiver("sensor-id")
+        receiver = hr.HeartRateReceiver("sensor-id", responder_id="firefighter_1")
         await receiver.start()
         try:
             first = await asyncio.wait_for(notified.get(), 1)
@@ -135,7 +145,7 @@ def test_ambiguous_sensor_never_connects(monkeypatch):
             ),
         )
         monkeypatch.setattr(hr.asyncio, "sleep", pause)
-        receiver = hr.HeartRateReceiver("H808S")
+        receiver = hr.HeartRateReceiver("H808S", responder_id="firefighter_1")
         await receiver.start()
         try:
             await asyncio.wait_for(scanned.wait(), 1)

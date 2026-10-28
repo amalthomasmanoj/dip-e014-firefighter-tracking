@@ -33,24 +33,38 @@ def parse_measurement(data: bytes | bytearray) -> Measurement:
 
 
 class HeartRateReceiver:
-    def __init__(self, device: str = "", wearer: str = "Wearer", stale_s: float = 5.0):
+    def __init__(
+        self,
+        device: str = "",
+        wearer: str = "Wearer",
+        stale_s: float = 5.0,
+        responder_id: str = "",
+    ):
         self.device = device.strip()
         self.wearer = wearer
+        self.responder_id = responder_id.strip()
         self.stale_s = stale_s
         self.status = "disabled" if not self.device else "disconnected"
         self.error: str | None = None
+        if self.device and not self.responder_id:
+            self.status = "error"
+            self.error = "Set E014_HR_RESPONDER_ID to assign the strap to a responder."
         self.device_name: str | None = None
         self.measurement: Measurement | None = None
-        self.timestamp_us: int | None = None
+        self.received_timestamp_us: int | None = None
         self._received_at: float | None = None
         self._task: asyncio.Task | None = None
 
     @classmethod
     def from_env(cls) -> HeartRateReceiver:
-        return cls(os.getenv("E014_HR_DEVICE", ""), os.getenv("E014_HR_WEARER", "Wearer"))
+        return cls(
+            device=os.getenv("E014_HR_DEVICE", ""),
+            wearer=os.getenv("E014_HR_WEARER", "Wearer"),
+            responder_id=os.getenv("E014_HR_RESPONDER_ID", ""),
+        )
 
     async def start(self) -> None:
-        if self.device and self._task is None:
+        if self.device and self.responder_id and self._task is None:
             self._task = asyncio.create_task(self._run())
 
     async def stop(self) -> None:
@@ -68,7 +82,7 @@ class HeartRateReceiver:
         except ValueError:
             return
         self.measurement = measurement
-        self.timestamp_us = time.time_ns() // 1_000
+        self.received_timestamp_us = time.time_ns() // 1_000
         self._received_at = time.monotonic()
 
     def snapshot(self) -> dict:
@@ -84,11 +98,12 @@ class HeartRateReceiver:
         live = status == "connected" and self.measurement is not None
         return {
             "source": "ble",
+            "responder_id": self.responder_id or None,
             "wearer": self.wearer,
             "device_name": self.device_name,
             "status": status,
             "bpm": self.measurement.bpm if live else None,
-            "timestamp_us": self.timestamp_us,
+            "received_timestamp_us": self.received_timestamp_us,
             "age_s": age,
             "error": self.error,
         }
@@ -127,7 +142,7 @@ class HeartRateReceiver:
                     # Reconnection must not revive a reading from the previous session.
                     self.measurement = None
                     self._received_at = None
-                    self.timestamp_us = None
+                    self.received_timestamp_us = None
                     await client.start_notify(HEART_RATE_MEASUREMENT, self.receive)
                     self.status = "connected"
                     await disconnected.wait()

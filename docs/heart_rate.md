@@ -40,6 +40,7 @@ Replace `PASTE_SENSOR_IDENTIFIER` with the identifier printed by the scan:
 ```bash
 E014_HR_DEVICE="PASTE_SENSOR_IDENTIFIER" \
 E014_HR_WEARER="Min" \
+E014_HR_RESPONDER_ID="firefighter_1" \
 uvicorn backend.api.app:app --host 127.0.0.1 --port 8000
 ```
 
@@ -49,9 +50,10 @@ configuration to the same command. Run a single backend worker: multiple workers
 would compete to connect to the same Bluetooth sensor. Stop any older backend
 process first. Reload is optional; code reloads disconnect/reconnect the strap.
 
-`E014_HR_WEARER` labels the actual wearer; it does not automatically assign the
-strap to a simulated firefighter or follow the dashboard's inspected-firefighter
-selector. This first integration supports one strap/wearer per backend.
+`E014_HR_WEARER` is the human-readable label and `E014_HR_RESPONDER_ID` binds
+the strap to the logical responder published by the localization pipeline. The
+dashboard hides BPM when a different firefighter is selected. This integration
+supports one strap/wearer per backend.
 
 ## 4. Start your dashboard in another terminal
 
@@ -68,6 +70,8 @@ has been estimated. Check http://localhost:8000/heart-rate for telemetry directl
 ## Connection behavior
 
 - Without `E014_HR_DEVICE`, Bluetooth stays disabled and the app works normally.
+- A configured device without `E014_HR_RESPONDER_ID` remains in an error state
+  rather than displaying an unassigned health reading.
 - The receiver retries after missing sensors, disconnects, and Bluetooth errors.
 - A connected sensor without a measurement shows **Waiting for reading**.
 - Readings older than five seconds show **Reading stale** and hide BPM.
@@ -79,6 +83,9 @@ Keep the wearer near the laptop for initial testing. Range depends on the radio,
 body obstruction, and building; distant tracking needs a wearable network gateway.
 This displays BPM telemetry, not raw ECG, and does not add alarm thresholds or
 heart-rate recording to the existing MCAP/localization contracts.
+
+`received_timestamp_us` is the laptop wall-clock arrival time. The standard BLE
+measurement used here does not provide a device measurement timestamp.
 
 ## Validation
 

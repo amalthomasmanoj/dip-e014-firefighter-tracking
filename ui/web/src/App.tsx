@@ -240,17 +240,21 @@ export default function App() {
     () => liveAnchorMap.links.filter((link) => link.accepted && link.age_s <= 5),
     [liveAnchorMap.links],
   );
+  const selectedTrackHasPosition = selectedTrack?.trajectory.some(
+    (state) => state.status.active_anchor_count >= 3,
+  ) ?? false;
   const livePositionResolved =
     liveAnchorMap.map_version > 0 &&
     anchors.length >= 3 &&
-    usableLiveAnchorCount >= 3 &&
-    (currentState?.status.active_anchor_count ?? 0) >= 3;
+    selectedTrackHasPosition;
   const visualizedState = source === "live" && !livePositionResolved
     ? null
     : currentState;
   const resolvedLiveTracks = source === "live" && liveAnchorMap.map_version > 0
     ? liveTracks.filter(
-      (track) => track.state !== null && track.state.status.active_anchor_count >= 3,
+      (track) => track.state !== null && track.trajectory.some(
+        (state) => state.status.active_anchor_count >= 3,
+      ),
     )
     : [];
   const activeTracks = source === "simulation"

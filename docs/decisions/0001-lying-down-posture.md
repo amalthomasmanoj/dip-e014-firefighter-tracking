@@ -7,7 +7,7 @@ Accepted.
 ## Context
 
 `contracts/estimated_state.schema.json` allowed two postures, `standing` and
-`crouching`. A firefighter who has fallen or is crawling under smoke is
+`crouching`. A firefighter who is lying or crawling under smoke is
 neither, and a prone responder is the single most operationally important
 posture the system can report.
 
@@ -32,9 +32,8 @@ possible future work and is deliberately not added here.
 
 Per the `AGENTS.md` contract-change procedure:
 
-- **Producer**: `backend/imu/activity.py` gains a second tilt threshold
-  (`DEFAULT_LYING_TILT_THRESHOLD_RAD`, 1.22 rad / ~70 degrees) and the
-  `lying_down` branch.
+- **Producer**: `backend/imu/activity.py` uses filtered waist tilt, hysteresis,
+  and a two-second dwell before publishing `lying_down`.
 - **Consumer**: `ui/web/src/types/state.ts` widens the posture union;
   `StatePanel` shows a prone alert; `DigitalTwinView` lays the avatar flat in
   both the three.js and canvas-fallback renderers.
@@ -46,7 +45,5 @@ Per the `AGENTS.md` contract-change procedure:
   and it has been updated. Any external consumer pinned to the two-value enum
   will reject states from a prone responder.
 
-The tilt threshold is a bring-up default, not a validated clinical value. It
-is chosen so a clearly horizontal trunk classifies as prone and a deep crouch
-does not. Validate it against real foot/trunk IMU recordings before relying
-on it operationally.
+The thresholds are bring-up defaults, not validated clinical values. Validate
+them against real waist-mounted ICM-20948 recordings before operational use.

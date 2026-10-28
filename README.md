@@ -7,14 +7,18 @@ Status: repository bootstrap / hardware integration pending.
 ## Core System
 
 ```text
-UWB + foot-mounted IMU/ZUPT
-    -> EKF / ESKF
+UWB position + waist-mounted ICM-20948 heading/posture
+    -> laptop estimator
     -> real-time responder state
     -> custom indoor tracking UI
     -> MCAP experiment recording
 ```
 
-The baseline goal is graceful degradation under imperfect sensing. UWB provides absolute range information when available. IMU propagation and foot-mounted ZUPT keep the trajectory moving through temporary UWB dropout while uncertainty grows. When UWB returns, the estimator should correct accumulated inertial drift.
+The current baseline keeps UWB authoritative for position. The waist-mounted
+ICM-20948 supplies calibrated relative heading and sustained lying posture;
+walking acceleration is not propagated into position and foot-step ZUPT is not
+claimed. A later ESKF may add inertial propagation only after waist-frame
+calibration and hardware datasets validate it.
 
 This bootstrap does not implement the production estimator or hardware drivers. It creates the contracts, package structure, fake data path, backend WebSocket, and React map UI needed for teams to work in parallel.
 
@@ -131,7 +135,8 @@ npm run build
 
 ## IMU Heading and Posture
 
-Heading ("direction") and posture (`standing` / `crouching` / `lying_down`)
+Heading ("direction") and posture (`standing` / `lying_down`; `crouching`
+remains contract-compatible but is not emitted by the waist classifier)
 are published in every `EstimatedState`. Both are injection points: supply
 your own implementation with `E014_HEADING_ESTIMATOR` and
 `E014_ACTIVITY_CLASSIFIER` instead of editing the estimator.
@@ -157,7 +162,7 @@ Important boundaries:
 
 - Firmware samples, timestamps, sequences, and transmits measurements.
 - Ingestion parses packets and preserves original measurement timestamps.
-- IMU/ZUPT logic produces typed measurements/events.
+- IMU logic transforms calibrated waist measurements and estimates heading/posture.
 - UWB logic works with known anchors and individual range measurements.
 - Fusion consumes typed measurements and publishes `EstimatedState`.
 - Logging records raw and processed channels without overwriting raw measurements.
@@ -168,7 +173,7 @@ Important boundaries:
 - M0: repository / interface freeze.
 - M1: fake end-to-end UI.
 - M2: real IMU acquisition.
-- M3: standalone IMU/ZUPT.
+- M3: standalone waist-IMU heading/posture.
 - M4: real UWB.
 - M5: baseline fusion.
 - M6: failure experiments.

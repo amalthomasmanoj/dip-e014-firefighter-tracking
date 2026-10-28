@@ -7,7 +7,7 @@ Current bootstrap status:
 - typed packet/state models
 - packet parser
 - sequence tracker
-- simple ZUPT detector API
+- waist-IMU heading and sustained posture classification
 - synthetic UWB trilateration utility
 - shared two-firefighter simulation with movable known anchors
 - continuous synthetic anchor-pair ranges and per-tag estimators

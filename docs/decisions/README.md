@@ -16,4 +16,5 @@ Do not add speculative decisions.
 ## Records
 
 - [0001 - Add `lying_down` to the posture contract](0001-lying-down-posture.md)
+- [0002 - Use a waist-mounted ICM-20948](0002-waist-mounted-icm20948.md)
 

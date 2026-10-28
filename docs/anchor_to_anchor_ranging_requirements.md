@@ -96,13 +96,14 @@ The current observed message contains tag-to-anchor ranges only:
   "t": 123456,
   "tag_id": 10,
   "anchors": {
-    "A1": {"distance": 150.0, "raw": 150.0, "rssi": -80.0, "fp_rssi": -82.0},
-    "A2": {"distance": 210.0, "raw": 210.0, "rssi": -81.0, "fp_rssi": -83.0}
+    "A1": {"distance": 150.0, "raw": 150.0},
+    "A2": {"distance": 210.0, "raw": 210.0}
   }
 }
 ```
 
-That message alone cannot reveal anchor-to-anchor distances or instantaneous
+Signal-diagnostic fields may be added when the hardware path exposes validated
+values, but consumers must not require them. That message alone cannot reveal anchor-to-anchor distances or instantaneous
 anchor coordinates.
 
 ### 5. Physical Test Information

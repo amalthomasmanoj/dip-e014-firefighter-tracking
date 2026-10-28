@@ -26,8 +26,8 @@ class Dwm3000AnchorSample:
     anchor_id: str
     distance_cm: float
     raw_cm: float
-    rssi_dbm: float
-    fp_rssi_dbm: float
+    rssi_dbm: float | None
+    fp_rssi_dbm: float | None
 
 
 @dataclass(frozen=True)
@@ -46,6 +46,7 @@ class Dwm3000Sweep:
     tag_id: int
     anchors: tuple[Dwm3000AnchorSample, ...]
     surveys: tuple[Dwm3000SurveyResult, ...] = ()
+    synthetic: bool = False
 
 
 def _require_non_negative_int(data: dict[str, Any], key: str) -> int:
@@ -99,6 +100,9 @@ def parse_dwm3000_sweep(payload: bytes | str | dict[str, Any]) -> Dwm3000Sweep:
 
     timestamp_ms = _require_non_negative_int(decoded, "t")
     tag_id = _require_non_negative_int(decoded, "tag_id")
+    synthetic = decoded.get("synthetic", False)
+    if not isinstance(synthetic, bool):
+        raise Dwm3000SweepError("field 'synthetic' must be boolean when present")
     anchors = decoded.get("anchors")
     if not isinstance(anchors, dict):
         raise Dwm3000SweepError("field 'anchors' must be an object")
@@ -122,8 +126,8 @@ def parse_dwm3000_sweep(payload: bytes | str | dict[str, Any]) -> Dwm3000Sweep:
                 anchor_id=anchor_id,
                 distance_cm=distance_cm,
                 raw_cm=raw_cm,
-                rssi_dbm=_require_finite_number(raw_sample, "rssi"),
-                fp_rssi_dbm=_require_finite_number(raw_sample, "fp_rssi"),
+                rssi_dbm=_optional_finite_number(raw_sample, "rssi"),
+                fp_rssi_dbm=_optional_finite_number(raw_sample, "fp_rssi"),
             )
         )
 
@@ -163,6 +167,7 @@ def parse_dwm3000_sweep(payload: bytes | str | dict[str, Any]) -> Dwm3000Sweep:
         tag_id=tag_id,
         anchors=tuple(samples),
         surveys=tuple(surveys),
+        synthetic=synthetic,
     )
 
 
@@ -179,7 +184,11 @@ def generic_packets_from_sweep(
         packets.append(
             {
                 "version": 1,
-                "node_id": f"dwm3000_tag_{sweep.tag_id}",
+                "node_id": (
+                    f"dwm3000_sim_tag_{sweep.tag_id}"
+                    if sweep.synthetic
+                    else f"dwm3000_tag_{sweep.tag_id}"
+                ),
                 "sequence_number": start_sequence_number + offset,
                 "timestamp_us": sweep.timestamp_ms * 1_000,
                 "type": "uwb_range",

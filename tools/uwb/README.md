@@ -82,9 +82,11 @@ The raw capture is optional and append-only. It records the original payload,
 sender address, and wall-clock arrival time before conversion. Do not commit
 real recordings or hotspot credentials.
 
-The current sweep diagnostics (`rssi` and `fp_rssi`) are preserved in optional
-raw capture but are not mapped to contract `quality`: no validated conversion
-from those two measurements to a generic quality score has been established.
+Sweep diagnostics (`rssi` and `fp_rssi`) are accepted when the authoritative
+firmware provides them, but they are optional and are not mapped to contract
+`quality`: no validated conversion to a generic score has been established.
+Transport fixtures set `"synthetic": true`; the adapter then uses a
+`dwm3000_sim_tag_<id>` node ID so that data cannot be confused with a real tag.
 
 At least three responding anchors with measured coordinates are needed for
 the current demo estimator to produce a 2-D position. Receiving one or two

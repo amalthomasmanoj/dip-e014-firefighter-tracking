@@ -242,6 +242,7 @@ export default function App() {
             liveUwb={source === "live" ? liveUwb : null}
             usableAnchorCount={usableLiveAnchorCount}
             firefighters={activeTracks}
+            source={source}
             anchorLinks={source === "simulation" && simulationOnline
               ? simulation?.anchor_links
               : source === "live"

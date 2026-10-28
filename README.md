@@ -166,6 +166,11 @@ python -m tools.fake_data.imu_scenario --scenario full --udp --realtime --loop
 See [docs/imu_heading_posture_integration.md](docs/imu_heading_posture_integration.md)
 for the interfaces, the test path, and the IMU wiring/firmware steps.
 
+## Live heart rate (COOSPO H808S)
+
+Display real Bluetooth heart rate independently of localization, including while
+the map runs in simulation. See [MacBook setup](docs/heart_rate.md).
+
 ## Architecture
 
 Start with [docs/architecture.md](docs/architecture.md), [docs/coordinate_frames.md](docs/coordinate_frames.md), and [contracts/README.md](contracts/README.md).

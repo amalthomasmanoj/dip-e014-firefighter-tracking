@@ -15,6 +15,7 @@ dependencies = [
   "uvicorn",
   "websockets",
   "pyyaml",
+  "certifi",
 ]
 
 [project.optional-dependencies]

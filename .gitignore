@@ -11,6 +11,8 @@ backend/config/anchors.local.yaml
 backend/config/responders.local.yaml
 node_modules/
 dist/
+.build-macos-venv/
+build/
 build/
 .vscode/
 .idea/

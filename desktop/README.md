@@ -6,6 +6,11 @@ Sensors or start public sharing. Real Sensors also starts the DWM3000 UDP adapte
 and preserves its raw datagrams under
 `~/Library/Logs/E014 Firefighter Tracking/`.
 
+On the first real-sensor run, wear the IMU in its normal waist mount, stand
+upright and still for a few seconds, then click **Calibrate Upright IMU**. The app
+measures and saves the sensor-to-body rotation under Application Support and
+reuses it on later launches. Recalibrate after changing the physical mounting.
+
 **Share Publicly** starts a free Cloudflare Quick Tunnel and copies its HTTPS URL.
 The URL is temporary, changes when the tunnel restarts, and is not an uptime-backed
 deployment. Anyone with that URL can view the telemetry, so stop the app after a

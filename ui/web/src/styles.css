@@ -81,6 +81,20 @@ body {
   font-size: 12px;
 }
 
+.desktop-calibration-needed,
+.desktop-calibration-ok {
+  flex-basis: 100%;
+  font-size: 12px;
+}
+
+.desktop-calibration-needed {
+  color: #ffd180;
+}
+
+.desktop-calibration-ok {
+  color: #9be8b0;
+}
+
 .app-header {
   align-items: center;
   display: flex;

@@ -1,0 +1,11 @@
+responders:
+  - responder_id: firefighter_1
+    uwb_node_id: dwm3000_tag_10
+    imu_node_id: imu_waist_01
+    # The app replaces this provisional transform after explicit upright
+    # calibration with the IMU mounted at the waist.
+    imu_mount_calibrated: false
+    imu_sensor_to_body:
+      - [1.0, 0.0, 0.0]
+      - [0.0, 1.0, 0.0]
+      - [0.0, 0.0, 1.0]

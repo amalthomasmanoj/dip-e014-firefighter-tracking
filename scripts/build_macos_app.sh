@@ -19,6 +19,7 @@ cd "$repo_root"
   --windowed \
   --name "E014 Firefighter Tracking" \
   --add-data "ui/web/dist:ui_dist" \
+  --add-data "desktop/responders.default.yaml:desktop_config" \
   --collect-submodules backend \
   --collect-submodules tools \
   --collect-submodules webview \

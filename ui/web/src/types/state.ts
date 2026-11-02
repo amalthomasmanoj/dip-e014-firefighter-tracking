@@ -68,6 +68,7 @@ export type LiveSensorStatus = {
   responder_id: string;
   imu_available: boolean;
   imu_age_s: number | null;
+  imu_mount_calibrated: boolean;
 };
 
 export type Anchor = {

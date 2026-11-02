@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from pathlib import Path
 import platform
 import re
 import shutil
@@ -17,9 +16,10 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 import certifi
-
+import yaml
 
 APP_NAME = "E014 Firefighter Tracking"
 QUICK_TUNNEL_PATTERN = re.compile(r"https://[a-z0-9-]+\.trycloudflare\.com")
@@ -43,6 +43,82 @@ def _bundled_ui_dist() -> Path:
     if bundled.is_dir():
         return bundled
     return Path(__file__).parents[1] / "ui" / "web" / "dist"
+
+
+def _bundled_default_responders() -> Path:
+    bundle_root = Path(getattr(sys, "_MEIPASS", Path(__file__).parents[1]))
+    bundled = bundle_root / "desktop_config" / "responders.default.yaml"
+    if bundled.is_file():
+        return bundled
+    return Path(__file__).with_name("responders.default.yaml")
+
+
+def _responder_config_path() -> Path:
+    destination = _app_support_dir() / "responders.yaml"
+    if not destination.exists():
+        source = _bundled_default_responders()
+        if not source.is_file():
+            raise RuntimeError("The bundled responder configuration is missing")
+        shutil.copyfile(source, destination)
+    return destination
+
+
+def _responder_entries(path: Path) -> list[dict[str, object]]:
+    decoded = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(decoded, dict) or not isinstance(decoded.get("responders"), list):
+        raise TypeError("The saved responder configuration is invalid")
+    entries = decoded["responders"]
+    if not all(isinstance(entry, dict) for entry in entries):
+        raise TypeError("The saved responder configuration is invalid")
+    return entries
+
+
+def _imu_mount_calibrated(path: Path) -> bool:
+    try:
+        entries = _responder_entries(path)
+    except (OSError, TypeError, yaml.YAMLError):
+        return False
+    return bool(entries) and all(entry.get("imu_mount_calibrated") is True for entry in entries)
+
+
+def _configured_responder_ids(path: Path) -> list[str]:
+    try:
+        entries = _responder_entries(path)
+    except (OSError, TypeError, yaml.YAMLError):
+        return []
+    return [
+        responder_id
+        for entry in entries
+        if isinstance((responder_id := entry.get("responder_id")), str)
+    ]
+
+
+def _save_imu_mount_calibration(
+    path: Path,
+    responder_id: str,
+    rotation: object,
+) -> None:
+    if not (
+        isinstance(rotation, list)
+        and len(rotation) == 3
+        and all(isinstance(row, list) and len(row) == 3 for row in rotation)
+    ):
+        raise RuntimeError("The backend returned an invalid IMU calibration")
+    decoded = yaml.safe_load(path.read_text(encoding="utf-8"))
+    entries = _responder_entries(path)
+    match = next(
+        (entry for entry in entries if entry.get("responder_id") == responder_id),
+        None,
+    )
+    if match is None:
+        raise RuntimeError(f"Responder {responder_id!r} is not configured")
+    match["imu_sensor_to_body"] = rotation
+    match["imu_mount_calibrated"] = True
+    assert isinstance(decoded, dict)
+    decoded["responders"] = entries
+    temporary = path.with_suffix(".yaml.tmp")
+    temporary.write_text(yaml.safe_dump(decoded, sort_keys=False), encoding="utf-8")
+    temporary.replace(path)
 
 
 def _child_command(*arguments: str) -> list[str]:
@@ -77,9 +153,16 @@ def _lan_address() -> str:
         probe.close()
 
 
-def _run_backend_child(source: str, port: int, ui_dist: Path) -> None:
+def _run_backend_child(
+    source: str,
+    port: int,
+    ui_dist: Path,
+    responder_config: Path,
+) -> None:
     os.environ["E014_SOURCE"] = source
     os.environ["E014_UI_DIST"] = str(ui_dist)
+    if source == "udp":
+        os.environ["E014_RESPONDERS_CONFIG"] = str(responder_config)
     import uvicorn
 
     from backend.api.app import create_app
@@ -126,9 +209,11 @@ def _ensure_cloudflared() -> Path:
     url = f"https://github.com/cloudflare/cloudflared/releases/latest/download/{archive_name}"
     archive_path.unlink(missing_ok=True)
     tls_context = ssl.create_default_context(cafile=certifi.where())
-    with urllib.request.urlopen(url, context=tls_context) as response:
-        with archive_path.open("wb") as output:
-            shutil.copyfileobj(response, output)
+    with (
+        urllib.request.urlopen(url, context=tls_context) as response,
+        archive_path.open("wb") as output,
+    ):
+        shutil.copyfileobj(response, output)
     with tarfile.open(archive_path, "r:gz") as archive:
         member = next((item for item in archive.getmembers() if Path(item.name).name == "cloudflared"), None)
         if member is None:
@@ -149,6 +234,7 @@ class HostController:
     def __init__(self) -> None:
         self.mode = "simulation"
         self.port = _available_tcp_port()
+        self.responder_config = _responder_config_path()
         self.backend: subprocess.Popen[str] | None = None
         self.adapter: subprocess.Popen[str] | None = None
         self.tunnel: subprocess.Popen[str] | None = None
@@ -170,6 +256,8 @@ class HostController:
                 "status": status,
                 "local_url": f"http://{_lan_address()}:{self.port}",
                 "public_url": self.public_url,
+                "imu_mount_calibrated": _imu_mount_calibrated(self.responder_config),
+                "responder_ids": _configured_responder_ids(self.responder_config),
             }
 
     def start(self, mode: str = "simulation") -> dict[str, object]:
@@ -191,7 +279,13 @@ class HostController:
         backend_log = (_log_dir() / f"backend-{timestamp}.log").open("a", encoding="utf-8")
         self._log_handles.append(backend_log)
         self.backend = subprocess.Popen(
-            _child_command("--backend-child", mode, str(self.port), str(ui_dist)),
+            _child_command(
+                "--backend-child",
+                mode,
+                str(self.port),
+                str(ui_dist),
+                str(self.responder_config),
+            ),
             stdout=backend_log,
             stderr=subprocess.STDOUT,
             text=True,
@@ -208,6 +302,34 @@ class HostController:
             )
         self._wait_for_backend(mode)
         return self.get_status()
+
+    def calibrate_imu_mount(self, responder_id: str) -> dict[str, object]:
+        with self._lock:
+            if self.mode != "udp" or self.backend is None or self.backend.poll() is not None:
+                raise RuntimeError("Start Real Sensors before calibrating the waist IMU")
+            request = urllib.request.Request(
+                f"http://127.0.0.1:{self.port}/responders/"
+                f"{urllib.parse.quote(responder_id, safe='')}/imu-mount-calibration",
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=4) as response:
+                    result = json.load(response)
+            except urllib.error.HTTPError as exc:
+                try:
+                    detail = json.load(exc).get("detail", str(exc))
+                except (ValueError, AttributeError):
+                    detail = str(exc)
+                raise RuntimeError(str(detail)) from exc
+            except (OSError, urllib.error.URLError, ValueError) as exc:
+                raise RuntimeError(f"IMU calibration failed: {exc}") from exc
+            _save_imu_mount_calibration(
+                self.responder_config,
+                responder_id,
+                result.get("imu_sensor_to_body"),
+            )
+            self._stop_locked()
+        return self.start("udp")
 
     def switch_mode(self, mode: str) -> dict[str, object]:
         return self.start(mode)
@@ -384,12 +506,21 @@ def _run_embedded_app() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(add_help=not getattr(sys, "frozen", False))
-    parser.add_argument("--backend-child", nargs=3, metavar=("SOURCE", "PORT", "UI_DIST"))
+    parser.add_argument(
+        "--backend-child",
+        nargs=4,
+        metavar=("SOURCE", "PORT", "UI_DIST", "RESPONDER_CONFIG"),
+    )
     parser.add_argument("--adapter-child", metavar="RAW_JSONL")
     args = parser.parse_args()
     if args.backend_child:
-        source, port, ui_dist = args.backend_child
-        _run_backend_child(source, int(port), Path(ui_dist))
+        source, port, ui_dist, responder_config = args.backend_child
+        _run_backend_child(
+            source,
+            int(port),
+            Path(ui_dist),
+            Path(responder_config),
+        )
         return
     if args.adapter_child:
         _run_adapter_child(Path(args.adapter_child))

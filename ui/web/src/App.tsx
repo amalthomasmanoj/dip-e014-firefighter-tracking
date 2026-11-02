@@ -39,12 +39,15 @@ type DesktopHostStatus = {
   status: string;
   local_url: string;
   public_url: string | null;
+  imu_mount_calibrated: boolean;
+  responder_ids: string[];
 };
 
 type DesktopHostApi = {
   get_status: () => Promise<DesktopHostStatus>;
   switch_mode: (mode: "simulation" | "udp") => Promise<DesktopHostStatus>;
   share_publicly: () => Promise<DesktopHostStatus>;
+  calibrate_imu_mount: (responderId: string) => Promise<DesktopHostStatus>;
   open_logs: () => Promise<void>;
 };
 
@@ -156,6 +159,24 @@ export default function App() {
       const status = await api.share_publicly();
       setDesktopHost(status);
       if (status.public_url) await navigator.clipboard.writeText(status.public_url);
+    } catch (error) {
+      setDesktopError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setDesktopAction("");
+    }
+  };
+
+  const calibrateDesktopImu = async (responderId: string) => {
+    const api = window.pywebview?.api;
+    if (!api || desktopAction) return;
+    setDesktopAction("Calibrating mounted waist IMU…");
+    setDesktopError("");
+    try {
+      const status = await api.calibrate_imu_mount(responderId);
+      setDesktopHost(status);
+      setTracks([]);
+      setLiveTracks([]);
+      setSelectedLiveTag("");
     } catch (error) {
       setDesktopError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -325,6 +346,7 @@ export default function App() {
     : source === "live"
       ? liveTracks.find((tag) => tag.node_id === selectedLiveTag) ?? liveTracks[0]
       : undefined;
+  const calibrationResponderId = selectedTrack?.node_id ?? desktopHost?.responder_ids[0];
   const activeTrajectory = selectedTrack?.trajectory ?? [];
   const currentState = selectedTrack?.state ?? activeTrajectory.at(-1) ?? null;
   const displayConnected = source === "simulation" ? simulationOnline : connected;
@@ -383,12 +405,28 @@ export default function App() {
           <button type="button" disabled={!desktopHost?.running || Boolean(desktopAction)} onClick={() => void shareDesktop()}>
             {desktopHost?.public_url ? "Copy Public URL" : "Share Publicly"}
           </button>
+          {desktopHost?.mode === "udp" ? (
+            <button
+              type="button"
+              disabled={!desktopHost.running || !calibrationResponderId || Boolean(desktopAction)}
+              onClick={() => calibrationResponderId && void calibrateDesktopImu(calibrationResponderId)}
+            >
+              Calibrate Upright IMU
+            </button>
+          ) : null}
           <button type="button" onClick={() => void window.pywebview?.api.open_logs()}>Logs</button>
           {desktopHost?.public_url ? (
             <span className="desktop-public-url" title={desktopHost.public_url}>{desktopHost.public_url}</span>
           ) : (
             <span className="desktop-local-url">Android: {desktopHost?.local_url ?? "starting…"}</span>
           )}
+          {desktopHost?.mode === "udp" ? (
+            <span className={desktopHost.imu_mount_calibrated ? "desktop-calibration-ok" : "desktop-calibration-needed"}>
+              {desktopHost.imu_mount_calibrated
+                ? "IMU mount calibrated"
+                : "Wear the waist IMU, stand upright and still, then calibrate."}
+            </span>
+          ) : null}
           {desktopError ? <span className="desktop-host-error">{desktopError}</span> : null}
         </section>
       ) : null}

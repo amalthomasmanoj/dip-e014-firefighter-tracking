@@ -2,6 +2,7 @@ import { AnchorLink, FirefighterTrack } from "../api/simulation";
 import { useEffect, useRef, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { buildingFootprintFromAnchors } from "./buildingFootprint";
 import {
   Anchor,
   BackendSource,
@@ -38,6 +39,7 @@ type AvatarParts = {
 
 const FIREFIGHTER_MODEL_URL = "/models/professional-firefighter.glb";
 const FIREFIGHTER_DISPLAY_HEIGHT_M = 1.72;
+const BUILDING_WALL_HEIGHT_M = 1.25;
 let firefighterModelPromise: Promise<THREE.Group> | null = null;
 let firefighterModelWarningShown = false;
 
@@ -286,10 +288,95 @@ function runCanvasFallback(
   }
 
   function project(xM: number, yM: number, zM = 0) {
+    const footprint = buildingFootprintFromAnchors(anchorsRef.current);
+    const centerX = footprint?.centerX ?? 0;
+    const centerY = footprint?.centerY ?? 0;
+    const widthM = footprint?.width ?? 1;
+    const depthM = footprint?.depth ?? 1;
+    const scale = Math.max(
+      12,
+      Math.min(
+        container.clientWidth * 0.82 / Math.max(widthM + depthM * 0.52, 1),
+        container.clientHeight * 0.58 / Math.max(depthM * 0.72 + widthM * 0.24, 1),
+      ),
+    );
     return {
-      x: container.clientWidth * 0.18 + xM * 66 + yM * 34,
-      y: container.clientHeight * 0.76 - xM * 18 - yM * 42 - zM * 70,
+      x: container.clientWidth * 0.5
+        + (xM - centerX) * scale
+        + (yM - centerY) * scale * 0.52,
+      y: container.clientHeight * 0.52
+        - (xM - centerX) * scale * 0.24
+        - (yM - centerY) * scale * 0.72
+        - zM * scale * 0.9,
     };
+  }
+
+  function drawBuildingOutline() {
+    const footprint = buildingFootprintFromAnchors(anchorsRef.current);
+    if (!footprint) {
+      return;
+    }
+    const floorCorners = [
+      project(footprint.minX, footprint.minY),
+      project(footprint.maxX, footprint.minY),
+      project(footprint.maxX, footprint.maxY),
+      project(footprint.minX, footprint.maxY),
+    ];
+    context.beginPath();
+    floorCorners.forEach((point, index) => {
+      if (index === 0) context.moveTo(point.x, point.y);
+      else context.lineTo(point.x, point.y);
+    });
+    context.closePath();
+    context.fillStyle = "#f2f6f9";
+    context.fill();
+    context.strokeStyle = "#7e9db5";
+    context.lineWidth = 2;
+    context.stroke();
+
+    context.strokeStyle = "#d0dce5";
+    context.lineWidth = 1;
+    const gridStepM = Math.max(1, Math.ceil(Math.max(footprint.width, footprint.depth) / 20));
+    for (let x = Math.ceil(footprint.minX); x <= footprint.maxX; x += gridStepM) {
+      const start = project(x, footprint.minY, 0.01);
+      const end = project(x, footprint.maxY, 0.01);
+      context.beginPath();
+      context.moveTo(start.x, start.y);
+      context.lineTo(end.x, end.y);
+      context.stroke();
+    }
+    for (let y = Math.ceil(footprint.minY); y <= footprint.maxY; y += gridStepM) {
+      const start = project(footprint.minX, y, 0.01);
+      const end = project(footprint.maxX, y, 0.01);
+      context.beginPath();
+      context.moveTo(start.x, start.y);
+      context.lineTo(end.x, end.y);
+      context.stroke();
+    }
+
+    const sides: Array<[[number, number], [number, number]]> = [
+      [[footprint.minX, footprint.minY], [footprint.maxX, footprint.minY]],
+      [[footprint.maxX, footprint.minY], [footprint.maxX, footprint.maxY]],
+      [[footprint.maxX, footprint.maxY], [footprint.minX, footprint.maxY]],
+      [[footprint.minX, footprint.maxY], [footprint.minX, footprint.minY]],
+    ];
+    sides.forEach(([from, to]) => {
+      const bottomA = project(from[0], from[1]);
+      const bottomB = project(to[0], to[1]);
+      const topA = project(from[0], from[1], BUILDING_WALL_HEIGHT_M);
+      const topB = project(to[0], to[1], BUILDING_WALL_HEIGHT_M);
+      context.beginPath();
+      context.moveTo(bottomA.x, bottomA.y);
+      context.lineTo(bottomB.x, bottomB.y);
+      context.lineTo(topB.x, topB.y);
+      context.lineTo(topA.x, topA.y);
+      context.closePath();
+      context.fillStyle = "rgba(126, 157, 181, 0.13)";
+      context.fill();
+      context.strokeStyle = "rgba(78, 115, 143, 0.72)";
+      context.lineWidth = 2;
+      context.stroke();
+    });
   }
 
   function drawAvatar(state: EstimatedState, elapsedS: number, color = "#d83a2e") {
@@ -367,24 +454,7 @@ function runCanvasFallback(
     context.fillStyle = "#f7f9fb";
     context.fillRect(0, 0, width, height);
 
-    context.strokeStyle = "#d8dee6";
-    context.lineWidth = 1;
-    for (let x = 0; x <= 8; x += 1) {
-      const start = project(x, 0);
-      const end = project(x, 6);
-      context.beginPath();
-      context.moveTo(start.x, start.y);
-      context.lineTo(end.x, end.y);
-      context.stroke();
-    }
-    for (let y = 0; y <= 6; y += 1) {
-      const start = project(0, y);
-      const end = project(8, y);
-      context.beginPath();
-      context.moveTo(start.x, start.y);
-      context.lineTo(end.x, end.y);
-      context.stroke();
-    }
+    drawBuildingOutline();
 
     const tracks = firefightersRef.current;
     const trails = tracks?.map((tag, index) => ({ states: tag.trajectory, color: index === 0 ? "#f08c2e" : "#008f92" }))
@@ -544,7 +614,8 @@ export function DigitalTwinView({
     scene.background = new THREE.Color(0xf7f9fb);
 
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
-    const cameraTarget = new THREE.Vector3(4, 0.5, -3);
+    const cameraTarget = new THREE.Vector3(0, 0.55, 0);
+    let cameraSpanM = 4;
 
     let renderer: THREE.WebGLRenderer;
     try {
@@ -570,18 +641,8 @@ export function DigitalTwinView({
     keyLight.castShadow = true;
     scene.add(hemiLight, keyLight);
 
-    const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(9, 7),
-      new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 }),
-    );
-    floor.rotation.x = -Math.PI / 2;
-    floor.position.set(4, 0, -3);
-    floor.receiveShadow = true;
-    scene.add(floor);
-
-    const grid = new THREE.GridHelper(9, 18, 0x9aa9b8, 0xd8dee6);
-    grid.position.set(4, 0.01, -3);
-    scene.add(grid);
+    const buildingGroup = new THREE.Group();
+    scene.add(buildingGroup);
 
     const anchorGroup = new THREE.Group();
     scene.add(anchorGroup);
@@ -665,12 +726,82 @@ export function DigitalTwinView({
       camera.aspect = clientWidth / Math.max(clientHeight, 1);
       const verticalFov = THREE.MathUtils.degToRad(camera.fov);
       const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
-      const distance = 6 / Math.sin(Math.min(verticalFov, horizontalFov) / 2);
+      const distance = Math.max(4, cameraSpanM * 0.68)
+        / Math.sin(Math.min(verticalFov, horizontalFov) / 2);
       camera.position.copy(cameraTarget).add(
         new THREE.Vector3(0.45, 0.65, 1).normalize().multiplyScalar(distance),
       );
       camera.lookAt(cameraTarget);
       camera.updateProjectionMatrix();
+    }
+
+    function syncBuildingOutline() {
+      clearVisualGroup(buildingGroup);
+      const footprint = buildingFootprintFromAnchors(anchorsRef.current);
+      if (!footprint) {
+        activeContainer.dataset.buildingOutline = "waiting-for-anchor-map";
+        return;
+      }
+
+      const floor = new THREE.Mesh(
+        new THREE.PlaneGeometry(footprint.width, footprint.depth),
+        new THREE.MeshStandardMaterial({ color: 0xf2f6f9, roughness: 0.86 }),
+      );
+      floor.rotation.x = -Math.PI / 2;
+      floor.position.set(footprint.centerX, 0, -footprint.centerY);
+      floor.receiveShadow = true;
+      buildingGroup.add(floor);
+
+      const gridPoints: THREE.Vector3[] = [];
+      const gridStepM = Math.max(1, Math.ceil(Math.max(footprint.width, footprint.depth) / 20));
+      for (let x = Math.ceil(footprint.minX); x <= footprint.maxX; x += gridStepM) {
+        gridPoints.push(
+          new THREE.Vector3(x, 0.012, -footprint.minY),
+          new THREE.Vector3(x, 0.012, -footprint.maxY),
+        );
+      }
+      for (let y = Math.ceil(footprint.minY); y <= footprint.maxY; y += gridStepM) {
+        gridPoints.push(
+          new THREE.Vector3(footprint.minX, 0.012, -y),
+          new THREE.Vector3(footprint.maxX, 0.012, -y),
+        );
+      }
+      buildingGroup.add(new THREE.LineSegments(
+        new THREE.BufferGeometry().setFromPoints(gridPoints),
+        new THREE.LineBasicMaterial({ color: 0xc8d5df, transparent: true, opacity: 0.82 }),
+      ));
+
+      const wallMaterial = new THREE.MeshStandardMaterial({
+        color: 0x90aec4,
+        transparent: true,
+        opacity: 0.18,
+        roughness: 0.72,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x4e738f, transparent: true, opacity: 0.82 });
+      const wallThicknessM = 0.08;
+      const wallSpecs = [
+        { width: footprint.width, depth: wallThicknessM, x: footprint.centerX, z: -footprint.minY },
+        { width: footprint.width, depth: wallThicknessM, x: footprint.centerX, z: -footprint.maxY },
+        { width: wallThicknessM, depth: footprint.depth, x: footprint.minX, z: -footprint.centerY },
+        { width: wallThicknessM, depth: footprint.depth, x: footprint.maxX, z: -footprint.centerY },
+      ];
+      wallSpecs.forEach((spec) => {
+        const geometry = new THREE.BoxGeometry(spec.width, BUILDING_WALL_HEIGHT_M, spec.depth);
+        const wall = new THREE.Mesh(geometry, wallMaterial);
+        wall.position.set(spec.x, BUILDING_WALL_HEIGHT_M / 2, spec.z);
+        wall.castShadow = true;
+        wall.receiveShadow = true;
+        const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), edgeMaterial);
+        edges.position.copy(wall.position);
+        buildingGroup.add(wall, edges);
+      });
+
+      cameraTarget.set(footprint.centerX, 0.55, -footprint.centerY);
+      cameraSpanM = Math.max(footprint.width, footprint.depth);
+      activeContainer.dataset.buildingOutline = "anchor-fitted";
+      resize();
     }
 
     function syncAnchors() {
@@ -748,16 +879,23 @@ export function DigitalTwinView({
 
     const resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(activeContainer);
+    syncBuildingOutline();
     resize();
     syncAnchors();
     syncRangeLinks();
 
+    let previousBuildingSignature = JSON.stringify(anchorsRef.current);
     let previousVisualSignature = "";
     let animationFrame = 0;
     const startedAtMs = performance.now();
 
     function animate() {
       const elapsedS = (performance.now() - startedAtMs) / 1000;
+      const buildingSignature = JSON.stringify(anchorsRef.current);
+      if (previousBuildingSignature !== buildingSignature) {
+        syncBuildingOutline();
+        previousBuildingSignature = buildingSignature;
+      }
       const visualSignature = JSON.stringify({
         anchors: anchorsRef.current,
         links: linksRef.current.map((link) => [link.initiator_id, link.responder_id, link.raw_range_m]),

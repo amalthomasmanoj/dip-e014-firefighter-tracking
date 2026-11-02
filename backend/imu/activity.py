@@ -137,8 +137,22 @@ class WaistPostureClassifier:
         )
         reliable_gravity = abs(accel_norm - 9.80665) <= 2.0
         if reliable_gravity:
-            if self._last_timestamp_us is not None and not (
-                0 < sample.timestamp_us - self._last_timestamp_us <= self._max_sample_gap_us
+            timestamp_delta_us = (
+                None
+                if self._last_timestamp_us is None
+                else sample.timestamp_us - self._last_timestamp_us
+            )
+            if timestamp_delta_us == 0:
+                # The estimator may publish several UWB-derived states between
+                # IMU samples. Do not re-filter one sample or reset posture
+                # dwell merely because that same sample is reused.
+                return ActivityEstimate(
+                    posture=self._posture,
+                    motion=instantaneous.motion,
+                    confidence=instantaneous.confidence,
+                )
+            if timestamp_delta_us is not None and not (
+                0 < timestamp_delta_us <= self._max_sample_gap_us
             ):
                 self._candidate = None
                 self._candidate_since_us = None

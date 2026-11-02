@@ -109,6 +109,21 @@ def test_tilt_classifier_requires_sustained_lying_posture() -> None:
     assert classifier.classify(sustained, 0.0, False).posture == "lying_down"
 
 
+def test_tilt_classifier_ignores_repeated_timestamp_for_posture_dwell() -> None:
+    classifier = TiltActivityClassifier(
+        dwell_us=200_000,
+        max_sample_gap_us=500_000,
+        low_pass_alpha=1.0,
+    )
+    sample = imu_sample(ax_mps2=9.81, ay_mps2=0.0, az_mps2=0.0)
+
+    assert classifier.classify(sample, 0.0, False).posture == "standing"
+    for _ in range(3):
+        assert classifier.classify(sample, 0.0, False).posture == "standing"
+    sustained = ImuMeasurement(**{**sample.__dict__, "timestamp_us": 200_001})
+    assert classifier.classify(sustained, 0.0, False).posture == "lying_down"
+
+
 def test_tilt_classifier_honours_custom_thresholds() -> None:
     sample = imu_sample(ax_mps2=7.0, ay_mps2=0.0, az_mps2=7.0)
     strict = TiltActivityClassifier(

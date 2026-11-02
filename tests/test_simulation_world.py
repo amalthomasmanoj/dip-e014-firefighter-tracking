@@ -50,6 +50,17 @@ def test_every_anchor_pair_exchanges_repeatedly_while_tags_are_stationary():
         assert new["valid"]
 
 
+def test_simulated_lying_posture_survives_interleaved_uwb_updates():
+    world = SimulationWorld(DEFAULT_ANCHORS)
+    world.toggle_lying("sim_tag_10")
+
+    for _ in range(35):
+        snapshot = world.step()
+
+    assert snapshot["firefighters"][0]["state"]["activity"]["posture"] == "lying_down"
+    assert snapshot["firefighters"][1]["state"]["activity"]["posture"] == "standing"
+
+
 @pytest.mark.parametrize("anchor_id", ["A1", "A2", "A3"])
 def test_moving_any_anchor_preserves_fixed_world_tag_positions(anchor_id):
     world = SimulationWorld(DEFAULT_ANCHORS)

@@ -1,4 +1,4 @@
-const baseUrl = import.meta.env.VITE_BACKEND_HTTP_URL ?? "http://localhost:8000";
+import { backendHttpUrl } from "./server";
 
 export type HeartRateSnapshot = {
   source: "ble";
@@ -21,6 +21,7 @@ export function heartRateMatchesResponder(
 }
 
 export async function fetchHeartRate(signal?: AbortSignal): Promise<HeartRateSnapshot> {
+  const baseUrl = backendHttpUrl();
   const response = await fetch(`${baseUrl}/heart-rate`, { signal });
   if (!response.ok) throw new Error(`failed to load heart rate: ${response.status}`);
   return response.json() as Promise<HeartRateSnapshot>;

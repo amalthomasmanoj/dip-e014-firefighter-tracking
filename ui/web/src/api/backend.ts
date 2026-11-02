@@ -5,10 +5,10 @@ import {
   LiveSensorStatus,
   LiveUwbSnapshot,
 } from "../types/state";
-
-const baseUrl = import.meta.env.VITE_BACKEND_HTTP_URL ?? "http://localhost:8000";
+import { backendHttpUrl } from "./server";
 
 export async function fetchBackendHealth(): Promise<BackendHealth> {
+  const baseUrl = backendHttpUrl();
   const response = await fetch(`${baseUrl}/health`);
   if (!response.ok) {
     throw new Error(`failed to load backend health: ${response.status}`);
@@ -21,6 +21,7 @@ export function backendSourceFromHealth(health: BackendHealth): BackendSource {
 }
 
 export async function fetchLiveUwbRanges(tagNodeId?: string): Promise<LiveUwbSnapshot> {
+  const baseUrl = backendHttpUrl();
   const query = tagNodeId ? `?tag_node_id=${encodeURIComponent(tagNodeId)}` : "";
   const response = await fetch(`${baseUrl}/uwb/ranges${query}`);
   if (!response.ok) {
@@ -30,6 +31,7 @@ export async function fetchLiveUwbRanges(tagNodeId?: string): Promise<LiveUwbSna
 }
 
 export async function fetchLiveAnchorMap(): Promise<LiveAnchorMapSnapshot> {
+  const baseUrl = backendHttpUrl();
   const response = await fetch(`${baseUrl}/uwb/anchor-map`);
   if (!response.ok) {
     throw new Error(`failed to load live anchor map: ${response.status}`);
@@ -40,6 +42,7 @@ export async function fetchLiveAnchorMap(): Promise<LiveAnchorMapSnapshot> {
 export async function fetchLiveSensorStatus(
   responderId: string,
 ): Promise<LiveSensorStatus> {
+  const baseUrl = backendHttpUrl();
   const response = await fetch(
     `${baseUrl}/responders/${encodeURIComponent(responderId)}/sensor-status`,
   );
@@ -53,6 +56,7 @@ export async function alignResponderHeading(
   responderId: string,
   headingRad = 0,
 ): Promise<void> {
+  const baseUrl = backendHttpUrl();
   const response = await fetch(
     `${baseUrl}/responders/${encodeURIComponent(responderId)}/heading-alignment`,
     {

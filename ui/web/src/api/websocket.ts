@@ -1,10 +1,11 @@
 import { StateMessage } from "../types/state";
+import { backendWebSocketUrl } from "./server";
 
 export function connectStateStream(
   onMessage: (message: StateMessage) => void,
   onConnectionChange: (connected: boolean) => void,
 ): WebSocket {
-  const url = import.meta.env.VITE_STATE_WS_URL ?? "ws://localhost:8000/ws/state";
+  const url = backendWebSocketUrl();
   const socket = new WebSocket(url);
 
   socket.addEventListener("open", () => onConnectionChange(true));

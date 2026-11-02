@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
+import os
+from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.api.live import LiveUdpStateHub
@@ -82,7 +85,13 @@ def create_app(
     app = FastAPI(title="E014 Firefighter Tracking Backend", lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+        allow_origins=[
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost",
+            "https://localhost",
+            "capacitor://localhost",
+        ],
         allow_methods=["GET", "POST"],
         allow_headers=["*"],
     )
@@ -173,6 +182,11 @@ def create_app(
             await websocket.close(code=1013, reason=str(exc))
         except WebSocketDisconnect:
             return
+
+    ui_dist_value = os.environ.get("E014_UI_DIST")
+    ui_dist = Path(ui_dist_value) if ui_dist_value else Path(__file__).parents[2] / "ui/web/dist"
+    if ui_dist.is_dir():
+        app.mount("/", StaticFiles(directory=ui_dist, html=True), name="ui")
 
     return app
 

@@ -1,4 +1,5 @@
 import { Anchor, EstimatedState, UwbRangeReading } from "../types/state";
+import { backendHttpUrl } from "./server";
 
 export type SimulatedFirefighter = {
   node_id: string;
@@ -32,15 +33,15 @@ export type SimulationCommand = {
   dx_m?: number;
   dy_m?: number;
 };
-const baseUrl = import.meta.env.VITE_BACKEND_HTTP_URL ?? "http://localhost:8000";
-
 export async function fetchSimulation(): Promise<SimulationSnapshot> {
+  const baseUrl = backendHttpUrl();
   const response = await fetch(`${baseUrl}/simulation`, { signal: AbortSignal.timeout(1500) });
   if (!response.ok) throw new Error(`Simulation unavailable (${response.status})`);
   return response.json() as Promise<SimulationSnapshot>;
 }
 
 export async function sendSimulationCommand(command: SimulationCommand): Promise<void> {
+  const baseUrl = backendHttpUrl();
   const response = await fetch(`${baseUrl}/simulation/command`, {
     method: "POST",
     signal: AbortSignal.timeout(1500),

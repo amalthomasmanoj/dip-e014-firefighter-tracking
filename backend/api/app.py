@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
-import os
 from pathlib import Path
 from typing import Literal
 
@@ -165,6 +165,26 @@ def create_app(
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
         return {"accepted": True, "responder_id": responder_id, "heading_rad": alignment.heading_rad}
+
+    @app.post("/responders/{responder_id}/imu-mount-calibration")
+    def calibrate_imu_mount(responder_id: str) -> dict[str, object]:
+        if active_source_mode is not SourceMode.UDP:
+            raise HTTPException(409, "IMU mount calibration requires real sensors")
+        try:
+            calibration = live_hub.calibrate_imu_mount(responder_id)
+        except KeyError as exc:
+            raise HTTPException(404, "unknown configured responder") from exc
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        return {
+            "accepted": True,
+            "responder_id": responder_id,
+            "imu_sensor_to_body": calibration.sensor_to_body,
+            "sample_count": calibration.sample_count,
+            "mean_accel_mps2": calibration.mean_accel_mps2,
+            "accel_rms_deviation_mps2": calibration.accel_rms_deviation_mps2,
+            "mean_gyro_norm_radps": calibration.mean_gyro_norm_radps,
+        }
 
     @app.websocket("/ws/state")
     async def state_websocket(websocket: WebSocket) -> None:

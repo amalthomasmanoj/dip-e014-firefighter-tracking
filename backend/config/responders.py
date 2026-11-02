@@ -25,6 +25,7 @@ class ResponderConfig:
     uwb_node_id: str
     imu_node_id: str
     imu_sensor_to_body: RotationMatrix = IDENTITY_ROTATION
+    imu_mount_calibrated: bool = True
 
 
 def _rotation_matrix(value: object, responder_id: str) -> RotationMatrix:
@@ -97,6 +98,11 @@ def load_responders(path: str | Path) -> tuple[ResponderConfig, ...]:
                 raise ValueError(f"physical node {node_id!r} is assigned more than once")
             physical_owners[node_id] = fields["responder_id"]
         logical_ids.add(fields["responder_id"])
+        imu_mount_calibrated = entry.get("imu_mount_calibrated", False)
+        if not isinstance(imu_mount_calibrated, bool):
+            raise TypeError(
+                f"responder {fields['responder_id']!r} imu_mount_calibrated must be boolean"
+            )
         responders.append(
             ResponderConfig(
                 **fields,
@@ -104,6 +110,7 @@ def load_responders(path: str | Path) -> tuple[ResponderConfig, ...]:
                     entry.get("imu_sensor_to_body", IDENTITY_ROTATION),
                     fields["responder_id"],
                 ),
+                imu_mount_calibrated=imu_mount_calibrated,
             )
         )
     return tuple(responders)
@@ -157,6 +164,33 @@ class ResponderRegistry:
     def uwb_node_id(self, responder_or_node_id: str) -> str:
         config = self._by_responder_id.get(responder_or_node_id)
         return config.uwb_node_id if config is not None else responder_or_node_id
+
+    def imu_node_id(self, responder_id: str) -> str:
+        config = self._by_responder_id.get(responder_id)
+        if config is None:
+            raise KeyError(responder_id)
+        return config.imu_node_id
+
+    def set_imu_sensor_to_body(
+        self,
+        responder_id: str,
+        rotation: RotationMatrix,
+    ) -> None:
+        config = self._by_responder_id.get(responder_id)
+        if config is None:
+            raise KeyError(responder_id)
+        updated = replace(
+            config,
+            imu_sensor_to_body=rotation,
+            imu_mount_calibrated=True,
+        )
+        self._by_responder_id[responder_id] = updated
+        self._by_node[updated.uwb_node_id] = updated
+        self._by_node[updated.imu_node_id] = updated
+
+    def imu_mount_calibrated(self, responder_id: str) -> bool:
+        config = self._by_responder_id.get(responder_id)
+        return config is None or config.imu_mount_calibrated
 
     def resolve(self, measurement: Measurement) -> tuple[str, Measurement]:
         config = self._by_node.get(measurement.node_id)

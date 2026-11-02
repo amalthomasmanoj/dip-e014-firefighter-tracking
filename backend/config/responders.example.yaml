@@ -4,6 +4,7 @@ responders:
     imu_node_id: wearable_01
     # Replace this identity matrix with the measured ICM-20948 sensor-to-waist
     # body rotation. Rows map sensor-frame vectors into body-frame x/y/z.
+    imu_mount_calibrated: false
     imu_sensor_to_body:
       - [1, 0, 0]
       - [0, 1, 0]

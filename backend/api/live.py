@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from collections import deque
 from collections.abc import AsyncIterator, Callable
 from contextlib import suppress
 
@@ -12,6 +13,7 @@ from backend.config.plugins import (
 )
 from backend.config.responders import ResponderConfig, ResponderRegistry
 from backend.fusion.demo_estimator import DemoSensorEstimator
+from backend.imu.mount_calibration import MountCalibration, calibrate_upright_mount
 from backend.ingestion.events import IngestedMeasurement
 from backend.ingestion.pipeline import udp_measurement_events
 from backend.models.measurements import ImuMeasurement, UwbPairRangeMeasurement
@@ -41,6 +43,7 @@ class LiveUdpStateHub:
         self._clock = clock
         self._estimators: dict[str, DemoSensorEstimator] = {}
         self._latest_imu_arrival_s: dict[str, float] = {}
+        self._raw_imu_windows: dict[str, deque[ImuMeasurement]] = {}
         self._subscribers: set[asyncio.Queue[str]] = set()
         self._task: asyncio.Task[None] | None = None
 
@@ -53,9 +56,16 @@ class LiveUdpStateHub:
 
         if isinstance(event.measurement, UwbPairRangeMeasurement):
             return None
+        if isinstance(event.measurement, ImuMeasurement):
+            self._raw_imu_windows.setdefault(
+                event.measurement.node_id,
+                deque(maxlen=100),
+            ).append(event.measurement)
         responder_id, measurement = self._registry.resolve(event.measurement)
         if isinstance(measurement, ImuMeasurement):
             self._latest_imu_arrival_s[responder_id] = event.arrival_time_s
+            if not self._registry.imu_mount_calibrated(responder_id):
+                return None
         estimator = self._estimators.get(responder_id)
         if estimator is None:
             estimator = self._new_estimator()
@@ -89,6 +99,19 @@ class LiveUdpStateHub:
     def uwb_node_id(self, responder_or_node_id: str) -> str:
         return self._registry.uwb_node_id(responder_or_node_id)
 
+    def calibrate_imu_mount(self, responder_id: str) -> MountCalibration:
+        imu_node_id = self._registry.imu_node_id(responder_id)
+        samples = tuple(self._raw_imu_windows.get(imu_node_id, ()))
+        calibration = calibrate_upright_mount(samples)
+        self._registry.set_imu_sensor_to_body(
+            responder_id,
+            calibration.sensor_to_body,
+        )
+        # Reset heading, posture, and cached transformed samples. UWB remains the
+        # authoritative position source and will repopulate this estimator.
+        self._estimators.pop(responder_id, None)
+        return calibration
+
     def sensor_status(
         self,
         responder_id: str,
@@ -107,6 +130,7 @@ class LiveUdpStateHub:
             "responder_id": responder_id,
             "imu_available": age_s is not None and age_s <= imu_stale_after_s,
             "imu_age_s": age_s,
+            "imu_mount_calibrated": self._registry.imu_mount_calibrated(responder_id),
         }
 
     async def _run(self) -> None:

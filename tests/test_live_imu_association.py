@@ -34,6 +34,26 @@ def event(node_id: str, timestamp_us: int, gz_radps: float) -> IngestedMeasureme
     )
 
 
+def sideways_event(node_id: str, timestamp_us: int) -> IngestedMeasurement:
+    sample = ImuMeasurement(
+        timestamp_us=timestamp_us,
+        node_id=node_id,
+        sequence_number=timestamp_us,
+        ax_mps2=9.80665,
+        ay_mps2=0.0,
+        az_mps2=0.0,
+        gx_radps=0.0,
+        gy_radps=0.0,
+        gz_radps=0.0,
+    )
+    return IngestedMeasurement(
+        measurement=sample,
+        sequence_status=SequenceStatus(node_id, timestamp_us, False, False, None),
+        arrival_time_s=timestamp_us / 1_000_000,
+        raw_payload=b"raw sideways imu",
+    )
+
+
 def heading(message: str) -> float:
     quaternion = json.loads(message)["state"]["orientation_xyzw"]
     return math.atan2(
@@ -112,8 +132,38 @@ def test_live_hub_reports_real_imu_freshness() -> None:
         "responder_id": "firefighter_1",
         "imu_available": False,
         "imu_age_s": None,
+        "imu_mount_calibrated": True,
     }
     hub.process(event("waist_1", 10_000_000, 0.0))
 
     assert hub.sensor_status("firefighter_1", now_s=10.5)["imu_available"] is True
     assert hub.sensor_status("firefighter_1", now_s=11.1)["imu_available"] is False
+
+
+def test_live_hub_calibrates_sideways_waist_mount_without_changing_raw_samples() -> None:
+    hub = LiveUdpStateHub(
+        LiveUwbRangeTracker(),
+        responders=(
+            ResponderConfig(
+                "firefighter_1",
+                "tag_1",
+                "waist_1",
+                imu_mount_calibrated=False,
+            ),
+        ),
+        estimator_factory=lambda: DemoSensorEstimator(
+            heading_estimator=GyroYawIntegrator(calibration_samples=0),
+            activity_classifier=WaistPostureClassifier(dwell_us=0),
+        ),
+    )
+    events = [sideways_event("waist_1", index * 20_000) for index in range(30)]
+    before_calibration = [hub.process(sample_event) for sample_event in events]
+
+    calibration = hub.calibrate_imu_mount("firefighter_1")
+    message = hub.process(sideways_event("waist_1", 600_000))
+
+    assert events[-1].measurement.ax_mps2 == pytest.approx(9.80665)
+    assert all(message is None for message in before_calibration)
+    assert calibration.sample_count == 30
+    assert message is not None
+    assert json.loads(message)["state"]["activity"]["posture"] == "standing"

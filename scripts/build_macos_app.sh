@@ -10,7 +10,7 @@ npm run build
 
 python3 -m venv "$build_env"
 "$build_env/bin/python" -m pip install --upgrade pip
-"$build_env/bin/python" -m pip install -e "$repo_root[heart-rate]" pyinstaller
+"$build_env/bin/python" -m pip install -e "$repo_root[heart-rate,desktop]" pyinstaller
 
 cd "$repo_root"
 "$build_env/bin/pyinstaller" \
@@ -21,6 +21,7 @@ cd "$repo_root"
   --add-data "ui/web/dist:ui_dist" \
   --collect-submodules backend \
   --collect-submodules tools \
+  --collect-submodules webview \
   desktop/macos_app.py
 
 echo "Built: $repo_root/dist/E014 Firefighter Tracking.app"

@@ -1,8 +1,9 @@
 # Desktop host
 
-The macOS app runs the UI and backend without a Terminal window. Choose either
-Simulation or Real Sensors, then select **Start**. Real Sensors also starts the
-DWM3000 UDP adapter and preserves its raw datagrams under
+The macOS app opens directly into the complete embedded dashboard with Simulation
+already running. Use the **Mac host** bar in the dashboard to switch to Real
+Sensors or start public sharing. Real Sensors also starts the DWM3000 UDP adapter
+and preserves its raw datagrams under
 `~/Library/Logs/E014 Firefighter Tracking/`.
 
 **Share Publicly** starts a free Cloudflare Quick Tunnel and copies its HTTPS URL.

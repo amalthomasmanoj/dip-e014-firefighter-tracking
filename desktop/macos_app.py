@@ -14,11 +14,9 @@ import sys
 import tarfile
 import threading
 import time
-import tkinter as tk
-from tkinter import messagebox, ttk
 import urllib.error
+import urllib.parse
 import urllib.request
-import webbrowser
 
 import certifi
 
@@ -56,7 +54,12 @@ def _child_command(*arguments: str) -> list[str]:
 def _available_tcp_port(preferred: int = 8000) -> int:
     for candidate in (preferred, 0):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
-            probe.bind(("127.0.0.1", candidate))
+            try:
+                probe.bind(("127.0.0.1", candidate))
+            except OSError:
+                if candidate == preferred:
+                    continue
+                raise
             if candidate == 0:
                 return int(probe.getsockname()[1])
             return candidate
@@ -140,126 +143,60 @@ def _ensure_cloudflared() -> Path:
     return destination
 
 
-class TrackingApp:
-    def __init__(self, root: tk.Tk) -> None:
-        self.root = root
-        self.root.title(APP_NAME)
-        self.root.geometry("620x430")
-        self.root.minsize(560, 400)
-        self.mode = tk.StringVar(value="simulation")
-        self.status = tk.StringVar(value="Stopped")
-        self.local_url = tk.StringVar(value="—")
-        self.public_url = tk.StringVar(value="—")
+class HostController:
+    """Own the packaged backend processes and expose safe controls to the WebView."""
+
+    def __init__(self) -> None:
+        self.mode = "simulation"
+        self.port = _available_tcp_port()
         self.backend: subprocess.Popen[str] | None = None
         self.adapter: subprocess.Popen[str] | None = None
         self.tunnel: subprocess.Popen[str] | None = None
-        self.port: int | None = None
+        self.public_url: str | None = None
         self._log_handles: list[object] = []
-        self._build_ui()
-        self.root.protocol("WM_DELETE_WINDOW", self.close)
+        self._lock = threading.RLock()
+        self._tunnel_ready = threading.Event()
 
-    def _build_ui(self) -> None:
-        container = ttk.Frame(self.root, padding=24)
-        container.pack(fill="both", expand=True)
-        ttk.Label(container, text=APP_NAME, font=("Helvetica", 20, "bold")).pack(anchor="w")
-        ttk.Label(
-            container,
-            text="Run the local tracking host and open the dashboard without Terminal.",
-        ).pack(anchor="w", pady=(4, 20))
+    def get_status(self) -> dict[str, object]:
+        with self._lock:
+            running = self.backend is not None and self.backend.poll() is None
+            source_label = "simulation" if self.mode == "simulation" else "real sensors"
+            status = f"Running {source_label}" if running else "Stopped"
+            if running and self.public_url:
+                status += " + publicly shared"
+            return {
+                "mode": self.mode,
+                "running": running,
+                "status": status,
+                "local_url": f"http://{_lan_address()}:{self.port}",
+                "public_url": self.public_url,
+            }
 
-        mode_frame = ttk.LabelFrame(container, text="Data source", padding=12)
-        mode_frame.pack(fill="x")
-        ttk.Radiobutton(
-            mode_frame,
-            text="Simulation",
-            variable=self.mode,
-            value="simulation",
-        ).pack(side="left", padx=(0, 20))
-        ttk.Radiobutton(
-            mode_frame,
-            text="Real sensors (DWM3000 + waist IMU)",
-            variable=self.mode,
-            value="udp",
-        ).pack(side="left")
-
-        status_frame = ttk.Frame(container, padding=(0, 18))
-        status_frame.pack(fill="x")
-        ttk.Label(status_frame, text="Status:").grid(row=0, column=0, sticky="w")
-        ttk.Label(status_frame, textvariable=self.status, font=("Helvetica", 13, "bold")).grid(
-            row=0, column=1, sticky="w", padx=8
-        )
-        ttk.Label(status_frame, text="Local / Android Wi-Fi URL:").grid(
-            row=1, column=0, sticky="w", pady=(12, 0)
-        )
-        ttk.Label(status_frame, textvariable=self.local_url).grid(
-            row=1, column=1, sticky="w", padx=8, pady=(12, 0)
-        )
-        ttk.Label(status_frame, text="Public URL:").grid(row=2, column=0, sticky="w", pady=(8, 0))
-        ttk.Label(status_frame, textvariable=self.public_url).grid(
-            row=2, column=1, sticky="w", padx=8, pady=(8, 0)
-        )
-        status_frame.columnconfigure(1, weight=1)
-
-        button_frame = ttk.Frame(container)
-        button_frame.pack(fill="x")
-        self.start_button = ttk.Button(button_frame, text="Start", command=self.start)
-        self.start_button.pack(side="left")
-        self.stop_button = ttk.Button(button_frame, text="Stop", command=self.stop, state="disabled")
-        self.stop_button.pack(side="left", padx=8)
-        self.open_button = ttk.Button(
-            button_frame, text="Open Dashboard", command=self.open_dashboard, state="disabled"
-        )
-        self.open_button.pack(side="left")
-        self.share_button = ttk.Button(
-            button_frame, text="Share Publicly", command=self.share_publicly, state="disabled"
-        )
-        self.share_button.pack(side="left", padx=8)
-
-        link_frame = ttk.Frame(container)
-        link_frame.pack(fill="x", pady=(12, 0))
-        ttk.Button(link_frame, text="Copy Local URL", command=lambda: self.copy(self.local_url.get())).pack(
-            side="left"
-        )
-        ttk.Button(link_frame, text="Copy Public URL", command=lambda: self.copy(self.public_url.get())).pack(
-            side="left", padx=8
-        )
-        ttk.Button(link_frame, text="Open Logs", command=self.open_logs).pack(side="right")
-
-        ttk.Separator(container).pack(fill="x", pady=18)
-        ttk.Label(
-            container,
-            text=(
-                "Public sharing uses a temporary free Cloudflare URL. Anyone with the URL can view "
-                "telemetry, so stop sharing after the demo."
-            ),
-            foreground="#6b4d00",
-            wraplength=560,
-        ).pack(anchor="w")
-
-    def start(self) -> None:
-        if self.backend is not None:
-            return
+    def start(self, mode: str = "simulation") -> dict[str, object]:
+        if mode not in {"simulation", "udp"}:
+            raise ValueError("Data source must be simulation or udp")
+        with self._lock:
+            if self.backend is not None and self.backend.poll() is None and self.mode == mode:
+                return self.get_status()
+            self._stop_locked()
+            self.mode = mode
         ui_dist = _bundled_ui_dist()
         if not ui_dist.is_dir():
-            messagebox.showerror(APP_NAME, "Bundled UI files are missing. Rebuild the Mac app.")
-            return
-        if self.mode.get() == "udp" and self._udp_port_busy(9000):
-            messagebox.showerror(
-                APP_NAME,
-                "UDP port 9000 is already in use. Stop the existing tracking backend and try again.",
+            raise RuntimeError("Bundled UI files are missing. Rebuild the Mac app.")
+        if mode == "udp" and self._udp_port_busy(9000):
+            raise RuntimeError(
+                "UDP port 9000 is already in use. Stop the existing tracking backend and try again."
             )
-            return
-        self.port = _available_tcp_port()
         timestamp = time.strftime("%Y%m%d-%H%M%S")
         backend_log = (_log_dir() / f"backend-{timestamp}.log").open("a", encoding="utf-8")
         self._log_handles.append(backend_log)
         self.backend = subprocess.Popen(
-            _child_command("--backend-child", self.mode.get(), str(self.port), str(ui_dist)),
+            _child_command("--backend-child", mode, str(self.port), str(ui_dist)),
             stdout=backend_log,
             stderr=subprocess.STDOUT,
             text=True,
         )
-        if self.mode.get() == "udp":
+        if mode == "udp":
             adapter_log = (_log_dir() / f"adapter-{timestamp}.log").open("a", encoding="utf-8")
             self._log_handles.append(adapter_log)
             raw_path = _log_dir() / f"raw-dwm3000-{timestamp}.jsonl"
@@ -269,10 +206,11 @@ class TrackingApp:
                 stderr=subprocess.STDOUT,
                 text=True,
             )
-        self.status.set("Starting…")
-        self.start_button.configure(state="disabled")
-        self.stop_button.configure(state="normal")
-        self.root.after(150, lambda: self._wait_for_backend(0))
+        self._wait_for_backend(mode)
+        return self.get_status()
+
+    def switch_mode(self, mode: str) -> dict[str, object]:
+        return self.start(mode)
 
     @staticmethod
     def _udp_port_busy(port: int) -> bool:
@@ -283,100 +221,113 @@ class TrackingApp:
                 return True
         return False
 
-    def _wait_for_backend(self, attempt: int) -> None:
-        if self.backend is None:
-            return
-        if self.backend.poll() is not None:
-            self.status.set("Failed — open logs for details")
-            self.stop()
-            return
-        assert self.port is not None
+    def _wait_for_backend(self, expected_mode: str) -> None:
+        for _attempt in range(80):
+            if self.backend is None or self.backend.poll() is not None:
+                self._stop_locked()
+                raise RuntimeError("The tracking backend stopped during startup. Open Logs for details.")
+            try:
+                with urllib.request.urlopen(
+                    f"http://127.0.0.1:{self.port}/health", timeout=0.4
+                ) as response:
+                    health = json.load(response)
+                if health.get("source") == expected_mode:
+                    return
+            except (OSError, urllib.error.URLError, ValueError):
+                pass
+            time.sleep(0.15)
+        self._stop_locked()
+        raise RuntimeError("The tracking backend timed out during startup. Open Logs for details.")
+
+    def share_publicly(self) -> dict[str, object]:
+        with self._lock:
+            if self.backend is None or self.backend.poll() is not None:
+                raise RuntimeError("The tracking backend is not running")
+            if self.public_url:
+                return self.get_status()
+            if self.tunnel is None or self.tunnel.poll() is not None:
+                self._tunnel_ready.clear()
+                cloudflared = _ensure_cloudflared()
+                self.tunnel = subprocess.Popen(
+                    [
+                        str(cloudflared),
+                        "tunnel",
+                        "--no-autoupdate",
+                        "--url",
+                        f"http://127.0.0.1:{self.port}",
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                )
+                threading.Thread(
+                    target=self._read_tunnel_output,
+                    args=(self.tunnel,),
+                    daemon=True,
+                ).start()
+        if not self._tunnel_ready.wait(timeout=30):
+            with self._lock:
+                self._terminate(self.tunnel)
+                self.tunnel = None
+            raise RuntimeError("Cloudflare did not provide a public URL within 30 seconds")
+        with self._lock:
+            if not self.public_url:
+                self.tunnel = None
+                raise RuntimeError("Cloudflare tunnel stopped before creating a public URL")
+            public_url = self.public_url
+        if not self._public_dns_available(public_url):
+            with self._lock:
+                self._terminate(self.tunnel)
+                self.tunnel = None
+                self.public_url = None
+            raise RuntimeError("The public URL was created but did not appear in public DNS")
+        return self.get_status()
+
+    @staticmethod
+    def _public_dns_available(public_url: str) -> bool:
+        tls_context = ssl.create_default_context(cafile=certifi.where())
+        hostname = urllib.parse.urlparse(public_url).hostname
+        if not hostname:
+            return False
+        query = urllib.parse.urlencode({"name": hostname, "type": "A"})
+        request = urllib.request.Request(
+            f"https://cloudflare-dns.com/dns-query?{query}",
+            headers={"Accept": "application/dns-json"},
+        )
+        for _attempt in range(40):
+            try:
+                with urllib.request.urlopen(
+                    request,
+                    context=tls_context,
+                    timeout=2,
+                ) as response:
+                    dns_response = json.load(response)
+                if dns_response.get("Status") == 0 and dns_response.get("Answer"):
+                    return True
+            except (OSError, urllib.error.URLError, ValueError):
+                time.sleep(0.5)
+        return False
+
+    def _read_tunnel_output(self, process: subprocess.Popen[str]) -> None:
+        log_path = _log_dir() / f"tunnel-{time.strftime('%Y%m%d-%H%M%S')}.log"
+        candidate_url: str | None = None
         try:
-            with urllib.request.urlopen(f"http://127.0.0.1:{self.port}/health", timeout=0.4) as response:
-                health = json.load(response)
-            expected = self.mode.get()
-            if health.get("source") != expected:
-                raise RuntimeError("Unexpected data source")
-        except (OSError, urllib.error.URLError, ValueError, RuntimeError):
-            if attempt < 80:
-                self.root.after(150, lambda: self._wait_for_backend(attempt + 1))
-            else:
-                self.status.set("Startup timed out — open logs for details")
-            return
-        self.status.set("Running simulation" if self.mode.get() == "simulation" else "Running real sensors")
-        self.local_url.set(f"http://{_lan_address()}:{self.port}")
-        self.open_button.configure(state="normal")
-        self.share_button.configure(state="normal")
-        self.open_dashboard()
-
-    def open_dashboard(self) -> None:
-        if self.port is not None:
-            webbrowser.open(f"http://127.0.0.1:{self.port}")
-
-    def share_publicly(self) -> None:
-        if self.port is None or self.backend is None or self.tunnel is not None:
-            return
-        if not messagebox.askyesno(
-            "Public telemetry link",
-            "Anyone with this temporary link can view the dashboard. Start public sharing?",
-        ):
-            return
-        self.status.set("Preparing secure public tunnel…")
-        self.share_button.configure(state="disabled")
-        threading.Thread(target=self._start_tunnel_worker, daemon=True).start()
-
-    def _start_tunnel_worker(self) -> None:
-        try:
-            cloudflared = _ensure_cloudflared()
-            assert self.port is not None
-            self.tunnel = subprocess.Popen(
-                [
-                    str(cloudflared),
-                    "tunnel",
-                    "--no-autoupdate",
-                    "--url",
-                    f"http://127.0.0.1:{self.port}",
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-            )
-            log_path = _log_dir() / f"tunnel-{time.strftime('%Y%m%d-%H%M%S')}.log"
             with log_path.open("a", encoding="utf-8") as output:
-                assert self.tunnel.stdout is not None
-                for line in self.tunnel.stdout:
+                assert process.stdout is not None
+                for line in process.stdout:
                     output.write(line)
                     output.flush()
                     match = QUICK_TUNNEL_PATTERN.search(line)
                     if match:
-                        url = match.group(0)
-                        self.root.after(0, lambda value=url: self._tunnel_ready(value))
-            code = self.tunnel.wait()
-            if code != 0:
-                self.root.after(0, lambda: self._tunnel_failed("Cloudflare tunnel stopped unexpectedly."))
-        except Exception as exc:
-            self.root.after(0, lambda error=str(exc): self._tunnel_failed(error))
-
-    def _tunnel_ready(self, url: str) -> None:
-        self.public_url.set(url)
-        self.status.set("Running + publicly shared")
-        self.copy(url)
-        messagebox.showinfo(APP_NAME, "Public URL copied. Paste it into Android or any browser.")
-
-    def _tunnel_failed(self, error: str) -> None:
-        self.public_url.set("—")
-        self.tunnel = None
-        self.status.set("Running — public sharing failed")
-        self.share_button.configure(state="normal")
-        messagebox.showerror(APP_NAME, f"Could not start public sharing:\n{error}")
-
-    def copy(self, value: str) -> None:
-        if value == "—":
-            return
-        self.root.clipboard_clear()
-        self.root.clipboard_append(value)
-        self.root.update()
+                        candidate_url = match.group(0)
+                    if candidate_url and "Registered tunnel connection" in line:
+                        with self._lock:
+                            self.public_url = candidate_url
+                        self._tunnel_ready.set()
+            process.wait()
+        finally:
+            self._tunnel_ready.set()
 
     def open_logs(self) -> None:
         subprocess.run(["open", str(_log_dir())], check=False)
@@ -392,28 +343,43 @@ class TrackingApp:
             process.kill()
             process.wait(timeout=2)
 
-    def stop(self) -> None:
+    def _stop_locked(self) -> None:
         self._terminate(self.tunnel)
         self._terminate(self.adapter)
         self._terminate(self.backend)
         self.tunnel = None
         self.adapter = None
         self.backend = None
-        self.port = None
+        self.public_url = None
+        self._tunnel_ready.set()
         for handle in self._log_handles:
             handle.close()
         self._log_handles.clear()
-        self.status.set("Stopped")
-        self.local_url.set("—")
-        self.public_url.set("—")
-        self.start_button.configure(state="normal")
-        self.stop_button.configure(state="disabled")
-        self.open_button.configure(state="disabled")
-        self.share_button.configure(state="disabled")
 
-    def close(self) -> None:
-        self.stop()
-        self.root.destroy()
+    def stop(self) -> dict[str, object]:
+        with self._lock:
+            self._stop_locked()
+            return self.get_status()
+
+
+def _run_embedded_app() -> None:
+    import webview
+
+    controller = HostController()
+    try:
+        controller.start("simulation")
+        webview.create_window(
+            APP_NAME,
+            url=f"http://127.0.0.1:{controller.port}/?desktop=1",
+            js_api=controller,
+            width=1440,
+            height=920,
+            min_size=(960, 640),
+            background_color="#f4f6f8",
+        )
+        webview.start(gui="cocoa", debug=False)
+    finally:
+        controller.stop()
 
 
 def main() -> None:
@@ -428,9 +394,7 @@ def main() -> None:
     if args.adapter_child:
         _run_adapter_child(Path(args.adapter_child))
         return
-    root = tk.Tk()
-    TrackingApp(root)
-    root.mainloop()
+    _run_embedded_app()
 
 
 if __name__ == "__main__":

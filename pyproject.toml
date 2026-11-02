@@ -20,6 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 heart-rate = ["bleak>=1.0,<4"]
+desktop = ["pywebview>=6.2,<7"]
 dev = [
   "pytest",
   "jsonschema",

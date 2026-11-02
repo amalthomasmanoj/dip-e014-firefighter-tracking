@@ -18,6 +18,69 @@ body {
   padding: 20px;
 }
 
+.desktop-host-bar {
+  align-items: center;
+  background: #17202a;
+  border-radius: 9px;
+  color: #ffffff;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 auto 16px;
+  max-width: 1180px;
+  padding: 10px 12px;
+}
+
+.desktop-host-bar > div {
+  display: grid;
+  margin-right: 8px;
+}
+
+.desktop-host-bar > div span,
+.desktop-host-bar label,
+.desktop-local-url,
+.desktop-public-url {
+  color: #c6d0da;
+  font-size: 12px;
+}
+
+.desktop-host-bar select,
+.desktop-host-bar button {
+  background: #ffffff;
+  border: 0;
+  border-radius: 6px;
+  color: #17202a;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 7px 10px;
+}
+
+.desktop-host-bar button {
+  cursor: pointer;
+}
+
+.desktop-host-bar button:disabled,
+.desktop-host-bar select:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.desktop-local-url,
+.desktop-public-url {
+  margin-left: auto;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-host-error {
+  color: #ffb4ab;
+  flex-basis: 100%;
+  font-size: 12px;
+}
+
 .app-header {
   align-items: center;
   display: flex;

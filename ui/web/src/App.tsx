@@ -33,6 +33,27 @@ import {
   StateMessage,
 } from "./types/state";
 
+type DesktopHostStatus = {
+  mode: "simulation" | "udp";
+  running: boolean;
+  status: string;
+  local_url: string;
+  public_url: string | null;
+};
+
+type DesktopHostApi = {
+  get_status: () => Promise<DesktopHostStatus>;
+  switch_mode: (mode: "simulation" | "udp") => Promise<DesktopHostStatus>;
+  share_publicly: () => Promise<DesktopHostStatus>;
+  open_logs: () => Promise<void>;
+};
+
+declare global {
+  interface Window {
+    pywebview?: { api: DesktopHostApi };
+  }
+}
+
 const emptyLiveUwbSnapshot: LiveUwbSnapshot = {
   source: "live",
   tag_node_id: null,
@@ -68,6 +89,10 @@ export default function App() {
   const [liveSensorStatus, setLiveSensorStatus] = useState<LiveSensorStatus | null>(null);
   const liveMapVersionRef = useRef(0);
   const androidViewer = isAndroidViewer();
+  const desktopApp = new URLSearchParams(window.location.search).get("desktop") === "1";
+  const [desktopHost, setDesktopHost] = useState<DesktopHostStatus | null>(null);
+  const [desktopAction, setDesktopAction] = useState("");
+  const [desktopError, setDesktopError] = useState("");
   const [showServerSetup, setShowServerSetup] = useState(
     androidViewer && savedServerUrl() === null,
   );
@@ -80,6 +105,61 @@ export default function App() {
       window.location.reload();
     } catch (error) {
       setServerUrlError(error instanceof Error ? error.message : "Invalid server URL.");
+    }
+  };
+
+  useEffect(() => {
+    if (!desktopApp) return;
+    let disposed = false;
+    const refresh = () => {
+      const api = window.pywebview?.api;
+      if (!api) return;
+      api.get_status()
+        .then((status) => {
+          if (!disposed) setDesktopHost(status);
+        })
+        .catch(() => undefined);
+    };
+    const ready = () => refresh();
+    window.addEventListener("pywebviewready", ready);
+    refresh();
+    const interval = window.setInterval(refresh, 1_000);
+    return () => {
+      disposed = true;
+      window.removeEventListener("pywebviewready", ready);
+      window.clearInterval(interval);
+    };
+  }, [desktopApp]);
+
+  const switchDesktopMode = async (mode: "simulation" | "udp") => {
+    const api = window.pywebview?.api;
+    if (!api || desktopAction) return;
+    setDesktopAction("Switching data source…");
+    setDesktopError("");
+    try {
+      setDesktopHost(await api.switch_mode(mode));
+      setTracks([]);
+      setLiveTracks([]);
+    } catch (error) {
+      setDesktopError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setDesktopAction("");
+    }
+  };
+
+  const shareDesktop = async () => {
+    const api = window.pywebview?.api;
+    if (!api || desktopAction) return;
+    setDesktopAction("Creating public URL…");
+    setDesktopError("");
+    try {
+      const status = await api.share_publicly();
+      setDesktopHost(status);
+      if (status.public_url) await navigator.clipboard.writeText(status.public_url);
+    } catch (error) {
+      setDesktopError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setDesktopAction("");
     }
   };
 
@@ -284,6 +364,34 @@ export default function App() {
 
   return (
     <main className="app-shell">
+      {desktopApp ? (
+        <section className="desktop-host-bar" aria-label="Desktop host controls">
+          <div>
+            <strong>Mac host</strong>
+            <span>{desktopAction || desktopHost?.status || "Connecting…"}</span>
+          </div>
+          <label htmlFor="desktop-source">Data source</label>
+          <select
+            id="desktop-source"
+            value={desktopHost?.mode ?? "simulation"}
+            disabled={!desktopHost || Boolean(desktopAction)}
+            onChange={(event) => void switchDesktopMode(event.target.value as "simulation" | "udp")}
+          >
+            <option value="simulation">Simulation</option>
+            <option value="udp">Real sensors</option>
+          </select>
+          <button type="button" disabled={!desktopHost?.running || Boolean(desktopAction)} onClick={() => void shareDesktop()}>
+            {desktopHost?.public_url ? "Copy Public URL" : "Share Publicly"}
+          </button>
+          <button type="button" onClick={() => void window.pywebview?.api.open_logs()}>Logs</button>
+          {desktopHost?.public_url ? (
+            <span className="desktop-public-url" title={desktopHost.public_url}>{desktopHost.public_url}</span>
+          ) : (
+            <span className="desktop-local-url">Android: {desktopHost?.local_url ?? "starting…"}</span>
+          )}
+          {desktopError ? <span className="desktop-host-error">{desktopError}</span> : null}
+        </section>
+      ) : null}
       <header className="app-header">
         <div>
           <h1>E014 Firefighter Tracking</h1>

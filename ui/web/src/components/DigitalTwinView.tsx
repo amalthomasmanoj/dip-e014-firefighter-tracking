@@ -1,6 +1,7 @@
 import { AnchorLink, FirefighterTrack } from "../api/simulation";
 import { useEffect, useRef, type MutableRefObject } from "react";
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
   Anchor,
   BackendSource,
@@ -22,6 +23,8 @@ type Props = {
 
 type AvatarParts = {
   root: THREE.Group;
+  fallbackBody: THREE.Group;
+  modelHost: THREE.Group;
   directionArrow: THREE.ArrowHelper;
   torso: THREE.Mesh;
   head: THREE.Mesh;
@@ -30,7 +33,61 @@ type AvatarParts = {
   leftArm: THREE.Mesh;
   rightArm: THREE.Mesh;
   beacon: THREE.Mesh;
+  disposed: boolean;
 };
+
+const FIREFIGHTER_MODEL_URL = "/models/professional-firefighter.glb";
+const FIREFIGHTER_DISPLAY_HEIGHT_M = 1.72;
+let firefighterModelPromise: Promise<THREE.Group> | null = null;
+let firefighterModelWarningShown = false;
+
+function loadFirefighterModel(): Promise<THREE.Group> {
+  if (!firefighterModelPromise) {
+    firefighterModelPromise = new GLTFLoader().loadAsync(FIREFIGHTER_MODEL_URL).then(({ scene }) => {
+      scene.updateMatrixWorld(true);
+      const originalBounds = new THREE.Box3().setFromObject(scene);
+      const originalHeight = originalBounds.max.y - originalBounds.min.y;
+      if (!Number.isFinite(originalHeight) || originalHeight <= 0) {
+        throw new Error("firefighter model has invalid bounds");
+      }
+
+      scene.scale.setScalar(FIREFIGHTER_DISPLAY_HEIGHT_M / originalHeight);
+      scene.updateMatrixWorld(true);
+      const scaledBounds = new THREE.Box3().setFromObject(scene);
+      const center = scaledBounds.getCenter(new THREE.Vector3());
+      scene.position.set(-center.x, -scaledBounds.min.y, -center.z);
+
+      // glTF characters conventionally face +Z. The tracking frame's visible
+      // forward direction is +X, matching the orange heading arrow.
+      scene.rotation.y = Math.PI / 2;
+      scene.traverse((object) => {
+        if (object instanceof THREE.Mesh) {
+          object.castShadow = true;
+          object.receiveShadow = true;
+        }
+      });
+      return scene;
+    });
+  }
+  return firefighterModelPromise;
+}
+
+function attachFirefighterModel(parts: AvatarParts): void {
+  void loadFirefighterModel()
+    .then((template) => {
+      if (parts.disposed || parts.modelHost.children.length > 0) {
+        return;
+      }
+      parts.modelHost.add(template.clone(true));
+      parts.fallbackBody.visible = false;
+    })
+    .catch((error: unknown) => {
+      if (!firefighterModelWarningShown) {
+        console.warn("Realistic firefighter model could not be loaded; using fallback avatar.", error);
+        firefighterModelWarningShown = true;
+      }
+    });
+}
 
 function headingFromQuaternion(q: EstimatedState["orientation_xyzw"]): number {
   return Math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z));
@@ -49,6 +106,8 @@ function createCylinder(
 
 function createAvatar(color = 0xd83a2e): AvatarParts {
   const root = new THREE.Group();
+  const fallbackBody = new THREE.Group();
+  const modelHost = new THREE.Group();
   const coatMaterial = new THREE.MeshStandardMaterial({ color, roughness: 0.58 });
   const stripeMaterial = new THREE.MeshStandardMaterial({ color: 0xf7c948, roughness: 0.45 });
   const helmetMaterial = new THREE.MeshStandardMaterial({ color: 0xffd447, roughness: 0.38 });
@@ -76,8 +135,24 @@ function createAvatar(color = 0xd83a2e): AvatarParts {
     0.13,
   );
 
-  root.add(torso, chestStripe, head, leftLeg, rightLeg, leftArm, rightArm, beacon);
-  return { root, directionArrow, torso, head, leftLeg, rightLeg, leftArm, rightArm, beacon };
+  fallbackBody.add(torso, chestStripe, head, leftLeg, rightLeg, leftArm, rightArm);
+  root.add(fallbackBody, modelHost, beacon);
+  const parts = {
+    root,
+    fallbackBody,
+    modelHost,
+    directionArrow,
+    torso,
+    head,
+    leftLeg,
+    rightLeg,
+    leftArm,
+    rightArm,
+    beacon,
+    disposed: false,
+  };
+  attachFirefighterModel(parts);
+  return parts;
 }
 
 function createTextSprite(text: string): THREE.Sprite {
@@ -156,7 +231,8 @@ function updateAvatar(parts: AvatarParts, state: EstimatedState | null, elapsedS
   parts.torso.rotation.z = 0;
 
   parts.head.position.set(0.02, 1.47 - crouchDrop, 0);
-  parts.beacon.position.set(0.02, 1.68 - crouchDrop, 0);
+  // The marker indicates the waist-worn sensor node, not a head beacon.
+  parts.beacon.position.set(0.02, 1.02 - crouchDrop, 0.26);
 
   parts.leftLeg.scale.y = legHeight / 0.72;
   parts.rightLeg.scale.y = legHeight / 0.72;
@@ -697,6 +773,11 @@ export function DigitalTwinView({
         previousVisualSignature = visualSignature;
       }
       updateAvatar(avatar, firefightersRef.current ? null : stateRef.current, elapsedS);
+      const realisticModelAttached = avatar.modelHost.children.length > 0
+        || [...firefighterVisuals.values()].some(
+          (visual) => visual.avatar.modelHost.children.length > 0,
+        );
+      activeContainer.dataset.avatarModel = realisticModelAttached ? "realistic" : "fallback";
       trajectoryLine.visible = !firefightersRef.current;
       if (trajectoryLine.userData.trajectory !== trajectoryRef.current) {
         updateTrajectory(trajectoryLine, trajectoryRef.current);
@@ -718,6 +799,10 @@ export function DigitalTwinView({
     return () => {
       window.cancelAnimationFrame(animationFrame);
       resizeObserver.disconnect();
+      avatar.disposed = true;
+      firefighterVisuals.forEach((visual) => {
+        visual.avatar.disposed = true;
+      });
       renderer.dispose();
       clearVisualGroup(scene);
       activeContainer.removeChild(renderer.domElement);

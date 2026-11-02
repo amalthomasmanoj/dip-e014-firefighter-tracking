@@ -1,0 +1,45 @@
+name: Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/mac-android-packaging
+    paths:
+      - "ui/web/**"
+      - ".github/workflows/android-apk.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  debug-apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ui/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/web/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - uses: android-actions/setup-android@v3
+      - name: Install web dependencies
+        run: npm ci
+      - name: Build and sync Android viewer
+        run: npm run build:android
+      - name: Build installable debug APK
+        run: ./gradlew assembleDebug
+        working-directory: ui/web/android
+      - uses: actions/upload-artifact@v4
+        with:
+          name: e014-firefighter-tracking-debug-apk
+          path: ui/web/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

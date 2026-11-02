@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">E014 Firefighter Tracking</string>
+    <string name="title_activity_main">E014 Firefighter Tracking</string>
+    <string name="package_name">sg.edu.e014.firefightertracking</string>
+    <string name="custom_url_scheme">sg.edu.e014.firefightertracking</string>
+</resources>

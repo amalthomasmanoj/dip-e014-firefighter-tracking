@@ -38,6 +38,86 @@ body {
   margin: 4px 0 0;
 }
 
+.header-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.server-button,
+.server-setup button {
+  background: #ffffff;
+  border: 1px solid #bac5d1;
+  border-radius: 7px;
+  color: #25313d;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 7px 12px;
+}
+
+.server-setup-backdrop {
+  align-items: center;
+  background: rgba(18, 27, 37, 0.56);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 20px;
+  position: fixed;
+  z-index: 1000;
+}
+
+.server-setup {
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 24px 70px rgba(18, 27, 37, 0.28);
+  display: grid;
+  gap: 12px;
+  max-width: 500px;
+  padding: 24px;
+  width: 100%;
+}
+
+.server-setup h2,
+.server-setup p {
+  margin: 0;
+}
+
+.server-setup label {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.server-setup input {
+  border: 1px solid #bac5d1;
+  border-radius: 7px;
+  font: inherit;
+  padding: 10px 12px;
+  width: 100%;
+}
+
+.server-setup .server-error {
+  color: #b42318;
+  font-size: 13px;
+}
+
+.server-setup-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.server-setup button.primary {
+  background: #1f6feb;
+  border-color: #1f6feb;
+  color: #ffffff;
+}
+
+.server-setup small {
+  color: #5f6b7a;
+  overflow-wrap: anywhere;
+}
+
 .status-pill {
   background: #eef1f4;
   border: 1px solid #c9d2dc;

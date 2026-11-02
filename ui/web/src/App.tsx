@@ -9,6 +9,7 @@ import {
   fetchLiveUwbRanges,
 } from "./api/backend";
 import { connectStateStream } from "./api/websocket";
+import { backendHttpUrl, isAndroidViewer, savedServerUrl, saveServerUrl } from "./api/server";
 import {
   appendLiveTrack,
   detectedLiveAnchors,
@@ -66,6 +67,21 @@ export default function App() {
   const [liveAnchorMap, setLiveAnchorMap] = useState<LiveAnchorMapSnapshot>(emptyLiveAnchorMap);
   const [liveSensorStatus, setLiveSensorStatus] = useState<LiveSensorStatus | null>(null);
   const liveMapVersionRef = useRef(0);
+  const androidViewer = isAndroidViewer();
+  const [showServerSetup, setShowServerSetup] = useState(
+    androidViewer && savedServerUrl() === null,
+  );
+  const [serverUrlInput, setServerUrlInput] = useState(savedServerUrl() ?? "");
+  const [serverUrlError, setServerUrlError] = useState("");
+
+  const applyServerUrl = () => {
+    try {
+      saveServerUrl(serverUrlInput);
+      window.location.reload();
+    } catch (error) {
+      setServerUrlError(error instanceof Error ? error.message : "Invalid server URL.");
+    }
+  };
 
   useEffect(() => {
     fetchAnchors()
@@ -273,7 +289,14 @@ export default function App() {
           <h1>E014 Firefighter Tracking</h1>
           <p>UWB position + waist IMU direction and lying posture</p>
         </div>
-        <span className={displayConnected ? "status-pill live" : "status-pill"}>{displayConnected ? source === "simulation" ? "SIMULATION" : "LIVE" : "OFFLINE"}</span>
+        <div className="header-actions">
+          {androidViewer ? (
+            <button className="server-button" type="button" onClick={() => setShowServerSetup(true)}>
+              Server
+            </button>
+          ) : null}
+          <span className={displayConnected ? "status-pill live" : "status-pill"}>{displayConnected ? source === "simulation" ? "SIMULATION" : "LIVE" : "OFFLINE"}</span>
+        </div>
       </header>
       <div className="workspace">
         <div className="main-views">
@@ -354,6 +377,33 @@ export default function App() {
           <ExperimentPlot trajectory={visualizedTrajectory} />
         </aside>
       </div>
+      {showServerSetup ? (
+        <div className="server-setup-backdrop" role="presentation">
+          <section className="server-setup" role="dialog" aria-modal="true" aria-labelledby="server-setup-title">
+            <h2 id="server-setup-title">Connect to Mac host</h2>
+            <p>Paste the Local URL or Public URL shown by the E014 Mac app.</p>
+            <label htmlFor="server-url">Server URL</label>
+            <input
+              id="server-url"
+              type="url"
+              placeholder="https://example.trycloudflare.com"
+              value={serverUrlInput}
+              onChange={(event) => {
+                setServerUrlInput(event.target.value);
+                setServerUrlError("");
+              }}
+            />
+            {serverUrlError ? <p className="server-error">{serverUrlError}</p> : null}
+            <div className="server-setup-actions">
+              {savedServerUrl() ? (
+                <button type="button" onClick={() => setShowServerSetup(false)}>Cancel</button>
+              ) : null}
+              <button className="primary" type="button" onClick={applyServerUrl}>Connect</button>
+            </div>
+            {savedServerUrl() ? <small>Current: {backendHttpUrl()}</small> : null}
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }

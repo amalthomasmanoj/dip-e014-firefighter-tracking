@@ -6,15 +6,20 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc && vite build",
+    "build:android": "tsc && VITE_ANDROID_APP=true vite build && cap sync android",
+    "open:android": "cap open android",
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run"
   },
   "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "three": "^0.186.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.6.0",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@types/three": "^0.186.0",

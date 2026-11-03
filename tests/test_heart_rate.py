@@ -54,8 +54,8 @@ def test_endpoint_independent_of_localization(monkeypatch):
     monkeypatch.delenv("E014_HR_DEVICE", raising=False)
     app = create_app(source_mode=SourceMode.REPLAY)
     route = next(r for r in app.routes if getattr(r, "path", None) == "/heart-rate")
-    assert route.endpoint()["status"] == "disabled"
-    assert route.endpoint()["bpm"] is None
+    assert asyncio.run(route.endpoint())["status"] == "disabled"
+    assert asyncio.run(route.endpoint())["bpm"] is None
 
 
 def test_reconnect_and_shutdown(monkeypatch):
@@ -92,7 +92,7 @@ def test_reconnect_and_shutdown(monkeypatch):
         monkeypatch.setitem(
             sys.modules, "bleak", SimpleNamespace(BleakScanner=Scanner, BleakClient=Client)
         )
-        monkeypatch.setattr(hr.asyncio, "sleep", retry_immediately)
+        monkeypatch.setattr(hr.HeartRateReceiver, "_retry_delay", staticmethod(retry_immediately))
         receiver = hr.HeartRateReceiver("sensor-id")
         await receiver.start()
         try:
@@ -134,7 +134,7 @@ def test_ambiguous_sensor_never_connects(monkeypatch):
                 BleakScanner=Scanner, BleakClient=lambda *_a, **_k: pytest.fail("ambiguous sensor")
             ),
         )
-        monkeypatch.setattr(hr.asyncio, "sleep", pause)
+        monkeypatch.setattr(hr.HeartRateReceiver, "_retry_delay", staticmethod(pause))
         receiver = hr.HeartRateReceiver("H808S")
         await receiver.start()
         try:

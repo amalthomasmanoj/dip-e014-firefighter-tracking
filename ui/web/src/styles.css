@@ -362,3 +362,22 @@ dd {
 .heart-rate-value { color: #b82c39; font-size: 44px; font-weight: 700; margin: 14px 0 4px; font-variant-numeric: tabular-nums; }
 .heart-rate-value span { color: #627083; font-size: 14px; font-weight: 400; }
 .heart-rate-caption { color: #627083; font-size: 12px; line-height: 1.5; margin: 4px 0 0; overflow-wrap: anywhere; }
+
+.hr-graph { margin-top: 16px; }
+.hr-graph svg { width: 100%; display: block; }
+.hr-graph text { font-size: 10px; fill: #627083; }
+.hr-alerts { border-top: 1px solid #e2e8ef; padding-top: 12px; }
+.hr-alerts h3 { font-size: 14px; margin: 0 0 8px; }
+.hr-alerts details { margin-top: 12px; font-size: 12px; }
+.hr-alerts summary { cursor: pointer; padding: 6px 0; font-weight: 600; }
+.hr-alerts button { padding: 7px 10px; margin: 8px 0; background: #f5f9fd; border: 1px solid #bac9d7; border-radius: 5px; cursor: pointer; }
+.hr-alerts button:disabled { cursor: default; opacity: 0.6; }
+.hr-settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.hr-settings-grid label { font-size: 11px; }
+.hr-settings-grid input { width: 100%; margin-top: 4px; padding: 6px; border: 1px solid #bac9d7; border-radius: 4px; }
+.hr-checkbox { display: flex !important; align-items: center; gap: 6px; padding: 10px 0; }
+.hr-alarm { background: #fff0f0; border: 1px solid #d55858; border-radius: 6px; padding: 10px; margin: 10px 0; color: #922020; font-size: 12px; }
+.hr-alarm p { line-height: 1.5; margin: 6px 0; }
+.hr-warning { color: #885300; background: #fff5df; padding: 8px; border-radius: 4px; font-size: 12px; }
+.hr-events { max-height: 220px; overflow: auto; padding-left: 20px; color: #627083; }
+.hr-events li { margin: 8px 0; line-height: 1.5; }

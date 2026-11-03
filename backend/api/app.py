@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from backend.api.live import LiveUdpStateHub
 from backend.api.websocket import state_messages_for_source
 from backend.config.source import SourceMode, source_mode_from_env
+from backend.heart_rate.monitor import AlertSettings
 from backend.heart_rate.receiver import HeartRateReceiver
 from backend.simulation.world import SimulationWorld
 from backend.uwb.anchors import Anchor, anchors_from_env
@@ -102,8 +103,19 @@ def create_app(
             raise HTTPException(422, str(exc)) from exc
         return {"accepted": True}
 
+    @app.post("/heart-rate/settings")
+    async def heart_rate_settings(settings: AlertSettings) -> dict:
+        heart_rate.monitor.configure(settings)
+        return heart_rate.monitor.snapshot()
+
+    @app.post("/heart-rate/alerts/{event_id}/acknowledge")
+    async def acknowledge_heart_rate_alert(event_id: int) -> dict:
+        if not heart_rate.monitor.acknowledge(event_id):
+            raise HTTPException(404, "unknown heart-rate alert")
+        return heart_rate.monitor.snapshot()
+
     @app.get("/heart-rate")
-    def heart_rate_snapshot() -> dict:
+    async def heart_rate_snapshot() -> dict:
         return heart_rate.snapshot()
 
     @app.get("/uwb/ranges")

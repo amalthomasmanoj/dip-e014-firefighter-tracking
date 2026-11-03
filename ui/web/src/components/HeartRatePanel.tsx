@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { HeartRateGraph } from "./HeartRateGraph";
+import { HeartRateAlerts } from "./HeartRateAlerts";
 import { fetchHeartRate, HeartRateSnapshot } from "../api/heartRate";
 
 const labels: Record<HeartRateSnapshot["status"], string> = {
@@ -16,11 +18,13 @@ const labels: Record<HeartRateSnapshot["status"], string> = {
 export function HeartRatePanel() {
   const [snapshot, setSnapshot] = useState<HeartRateSnapshot | null>(null);
   const [online, setOnline] = useState(false);
+  const [nowUs, setNowUs] = useState(Date.now() * 1000);
   useEffect(() => {
     let disposed = false;
     let timer: number | undefined;
     let controller: AbortController | undefined;
     async function refresh() {
+      setNowUs(Date.now() * 1000);
       controller = new AbortController();
       const timeout = window.setTimeout(() => controller?.abort(), 2_000);
       try {
@@ -61,6 +65,8 @@ export function HeartRatePanel() {
       {online && snapshot?.status === "disabled" ?
         <p className="heart-rate-caption">Configure the H808S on the backend to receive readings.</p> : null}
       {online && snapshot?.error ? <p className="heart-rate-caption">{snapshot.error}</p> : null}
+      <HeartRateGraph points={snapshot?.monitor?.history ?? []} nowUs={nowUs} />
+      {snapshot?.monitor ? <HeartRateAlerts monitor={snapshot.monitor} online={online} /> : null}
     </section>
   );
 }

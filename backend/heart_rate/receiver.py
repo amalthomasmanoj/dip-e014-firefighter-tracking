@@ -6,6 +6,8 @@ import time
 from contextlib import suppress
 from dataclasses import dataclass
 
+from backend.heart_rate.monitor import HeartRateMonitor
+
 HEART_RATE_MEASUREMENT = "00002a37-0000-1000-8000-00805f9b34fb"
 
 
@@ -34,6 +36,8 @@ def parse_measurement(data: bytes | bytearray) -> Measurement:
 
 class HeartRateReceiver:
     def __init__(self, device: str = "", wearer: str = "Wearer", stale_s: float = 5.0):
+        self.monitor = HeartRateMonitor()
+        self._watchdog: asyncio.Task | None = None
         self.device = device.strip()
         self.wearer = wearer
         self.stale_s = stale_s
@@ -52,8 +56,20 @@ class HeartRateReceiver:
     async def start(self) -> None:
         if self.device and self._task is None:
             self._task = asyncio.create_task(self._run())
+            self._watchdog = asyncio.create_task(self._watch())
+
+    async def _watch(self) -> None:
+        while True:
+            state = self.snapshot()
+            self.monitor.tick(state["status"] == "connected", bool(self.device))
+            await asyncio.sleep(0.5)
 
     async def stop(self) -> None:
+        if self._watchdog is not None:
+            self._watchdog.cancel()
+            with suppress(asyncio.CancelledError):
+                await self._watchdog
+            self._watchdog = None
         if self._task is not None:
             self._task.cancel()
             with suppress(asyncio.CancelledError):
@@ -70,6 +86,7 @@ class HeartRateReceiver:
         self.measurement = measurement
         self.timestamp_us = time.time_ns() // 1_000
         self._received_at = time.monotonic()
+        self.monitor.observe(measurement.bpm, self.timestamp_us, measurement.contact)
 
     def snapshot(self) -> dict:
         age = None if self._received_at is None else time.monotonic() - self._received_at
@@ -77,7 +94,7 @@ class HeartRateReceiver:
         if status == "connected":
             if self.measurement is not None and self.measurement.contact is False:
                 status = "no_contact"
-            elif age is None:
+            elif self.measurement is not None and self.measurement.bpm == 0 or age is None:
                 status = "waiting"
             elif age > self.stale_s:
                 status = "stale"
@@ -91,7 +108,12 @@ class HeartRateReceiver:
             "timestamp_us": self.timestamp_us,
             "age_s": age,
             "error": self.error,
+            "monitor": self.monitor.snapshot(),
         }
+
+    @staticmethod
+    async def _retry_delay(seconds: float) -> None:
+        await asyncio.sleep(seconds)
 
     async def _run(self) -> None:
         try:
@@ -102,6 +124,7 @@ class HeartRateReceiver:
             return
         while True:
             try:
+                self.monitor.unavailable()
                 self.status = "scanning"
                 self.error = None
                 devices = await BleakScanner.discover(timeout=5.0)
@@ -137,7 +160,7 @@ class HeartRateReceiver:
             except Exception as exc:  # noqa: BLE001 - isolate platform Bluetooth failures
                 self.status = "error"
                 self.error = str(exc)
-            await asyncio.sleep(3.0)
+            await self._retry_delay(3.0)
 
 
 async def scan() -> None:

@@ -1,0 +1,67 @@
+name: Windows EXE
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - fix/macos-real-imu-calibration
+    paths:
+      - "backend/**"
+      - "desktop/**"
+      - "ui/web/**"
+      - "scripts/build_windows_app.ps1"
+      - ".github/workflows/windows-exe.yml"
+      - "pyproject.toml"
+
+permissions:
+  contents: read
+
+jobs:
+  windows-exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ui/web/package-lock.json
+      - name: Build standalone Windows app
+        shell: pwsh
+        run: ./scripts/build_windows_app.ps1
+      - name: Smoke-test packaged executable
+        shell: pwsh
+        run: |
+          $process = Start-Process `
+            -FilePath "dist/E014-Firefighter-Tracking.exe" `
+            -ArgumentList "--backend-child", "simulation", "8765", "ui/web/dist", "desktop/responders.default.yaml" `
+            -PassThru
+          try {
+            $healthy = $false
+            for ($attempt = 0; $attempt -lt 60; $attempt++) {
+              Start-Sleep -Milliseconds 500
+              try {
+                $health = Invoke-RestMethod -Uri "http://127.0.0.1:8765/health" -TimeoutSec 1
+                if ($health.status -eq "ok" -and $health.source -eq "simulation") {
+                  $healthy = $true
+                  break
+                }
+              }
+              catch {}
+            }
+            if (-not $healthy) {
+              throw "Packaged Windows backend did not become healthy"
+            }
+          }
+          finally {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: E014-Firefighter-Tracking-Windows
+          path: dist/E014-Firefighter-Tracking.exe
+          if-no-files-found: error

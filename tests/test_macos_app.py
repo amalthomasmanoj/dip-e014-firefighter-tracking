@@ -1,10 +1,12 @@
 import socket
+import sys
 from pathlib import Path
 
 import yaml
 
 from desktop.macos_app import (
     _available_tcp_port,
+    _cloudflared_download_name,
     _imu_mount_calibrated,
     _save_imu_mount_calibration,
 )
@@ -42,3 +44,11 @@ def test_saved_mount_calibration_is_reused(tmp_path: Path) -> None:
     decoded = yaml.safe_load(path.read_text(encoding="utf-8"))
     assert _imu_mount_calibrated(path) is True
     assert decoded["responders"][0]["imu_sensor_to_body"][2] == [1.0, 0.0, 0.0]
+
+
+def test_windows_cloudflared_download_uses_executable(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(sys, "platform", "win32")
+
+    assert _cloudflared_download_name() == "cloudflared-windows-amd64.exe"

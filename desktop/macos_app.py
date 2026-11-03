@@ -26,13 +26,20 @@ QUICK_TUNNEL_PATTERN = re.compile(r"https://[a-z0-9-]+\.trycloudflare\.com")
 
 
 def _app_support_dir() -> Path:
-    path = Path.home() / "Library" / "Application Support" / APP_NAME
+    if sys.platform == "win32":
+        base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+        path = base / APP_NAME
+    else:
+        path = Path.home() / "Library" / "Application Support" / APP_NAME
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def _log_dir() -> Path:
-    path = Path.home() / "Library" / "Logs" / APP_NAME
+    if sys.platform == "win32":
+        path = _app_support_dir() / "Logs"
+    else:
+        path = Path.home() / "Library" / "Logs" / APP_NAME
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -188,8 +195,14 @@ def _run_adapter_child(raw_jsonl: Path) -> None:
     )
 
 
-def _cloudflared_archive_name() -> str:
+def _cloudflared_download_name() -> str:
     machine = platform.machine().lower()
+    if sys.platform == "win32":
+        if machine in {"x86_64", "amd64", "arm64", "aarch64"}:
+            # Cloudflare's amd64 binary runs on standard x64 Windows and on
+            # Windows-on-ARM through its x64 emulation layer.
+            return "cloudflared-windows-amd64.exe"
+        raise RuntimeError(f"Unsupported Windows architecture: {machine}")
     if machine in {"arm64", "aarch64"}:
         return "cloudflared-darwin-arm64.tgz"
     if machine in {"x86_64", "amd64"}:
@@ -201,10 +214,12 @@ def _ensure_cloudflared() -> Path:
     installed = shutil.which("cloudflared")
     if installed:
         return Path(installed)
-    destination = _app_support_dir() / "cloudflared"
+    destination = _app_support_dir() / (
+        "cloudflared.exe" if sys.platform == "win32" else "cloudflared"
+    )
     if destination.is_file():
         return destination
-    archive_name = _cloudflared_archive_name()
+    archive_name = _cloudflared_download_name()
     archive_path = _app_support_dir() / archive_name
     url = f"https://github.com/cloudflare/cloudflared/releases/latest/download/{archive_name}"
     archive_path.unlink(missing_ok=True)
@@ -214,17 +229,23 @@ def _ensure_cloudflared() -> Path:
         archive_path.open("wb") as output,
     ):
         shutil.copyfileobj(response, output)
-    with tarfile.open(archive_path, "r:gz") as archive:
-        member = next((item for item in archive.getmembers() if Path(item.name).name == "cloudflared"), None)
-        if member is None:
-            raise RuntimeError("The Cloudflare download did not contain cloudflared")
-        extracted = archive.extractfile(member)
-        if extracted is None:
-            raise RuntimeError("Unable to extract cloudflared")
-        with destination.open("wb") as output:
-            shutil.copyfileobj(extracted, output)
-    archive_path.unlink(missing_ok=True)
-    destination.chmod(0o755)
+    if sys.platform == "win32":
+        archive_path.replace(destination)
+    else:
+        with tarfile.open(archive_path, "r:gz") as archive:
+            member = next(
+                (item for item in archive.getmembers() if Path(item.name).name == "cloudflared"),
+                None,
+            )
+            if member is None:
+                raise RuntimeError("The Cloudflare download did not contain cloudflared")
+            extracted = archive.extractfile(member)
+            if extracted is None:
+                raise RuntimeError("Unable to extract cloudflared")
+            with destination.open("wb") as output:
+                shutil.copyfileobj(extracted, output)
+        archive_path.unlink(missing_ok=True)
+        destination.chmod(0o755)
     return destination
 
 
@@ -452,7 +473,10 @@ class HostController:
             self._tunnel_ready.set()
 
     def open_logs(self) -> None:
-        subprocess.run(["open", str(_log_dir())], check=False)
+        if sys.platform == "win32":
+            os.startfile(_log_dir())
+        else:
+            subprocess.run(["open", str(_log_dir())], check=False)
 
     @staticmethod
     def _terminate(process: subprocess.Popen[str] | None) -> None:
@@ -499,7 +523,7 @@ def _run_embedded_app() -> None:
             min_size=(960, 640),
             background_color="#f4f6f8",
         )
-        webview.start(gui="cocoa", debug=False)
+        webview.start(gui="edgechromium" if sys.platform == "win32" else "cocoa", debug=False)
     finally:
         controller.stop()
 

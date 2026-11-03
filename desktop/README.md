@@ -24,3 +24,17 @@ Build the unsigned local application with:
 
 The result is `dist/E014 Firefighter Tracking.app`. macOS may require a one-time
 right-click **Open** because the local build is not notarized.
+
+## Windows
+
+The Windows build contains the same dashboard, simulation, real-sensor receiver,
+IMU calibration, DWM3000 adapter, and public-sharing controls in one executable.
+Build it on Windows with:
+
+```powershell
+.\scripts\build_windows_app.ps1
+```
+
+The result is `dist\E014-Firefighter-Tracking.exe`. On first real-sensor use,
+allow the app through Windows Firewall on private networks. Windows 10/11 should
+already include the Microsoft Edge WebView2 runtime required by the embedded UI.

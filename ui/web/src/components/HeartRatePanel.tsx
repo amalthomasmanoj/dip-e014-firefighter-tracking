@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import {
   fetchHeartRate,
   heartRateMatchesResponder,
@@ -19,12 +19,46 @@ const labels: Record<HeartRateSnapshot["status"], string> = {
   error: "Connection problem",
 };
 
-type Props = { selectedResponderId?: string };
+export type DesktopHeartRateConfiguration = {
+  device: string;
+  wearer: string;
+  responder_id: string;
+  configured: boolean;
+};
 
-export function HeartRatePanel({ selectedResponderId }: Props) {
+type Props = {
+  selectedResponderId?: string;
+  desktopConfiguration?: DesktopHeartRateConfiguration;
+  responderIds?: string[];
+  onConfigure?: (device: string, wearer: string, responderId: string) => Promise<void>;
+};
+
+export function HeartRatePanel({
+  selectedResponderId,
+  desktopConfiguration,
+  responderIds = [],
+  onConfigure,
+}: Props) {
   const [snapshot, setSnapshot] = useState<HeartRateSnapshot | null>(null);
   const [online, setOnline] = useState(false);
   const [nowUs, setNowUs] = useState(Date.now() * 1000);
+  const [device, setDevice] = useState("H808S");
+  const [wearer, setWearer] = useState("Firefighter 1");
+  const [responderId, setResponderId] = useState("");
+  const [setupError, setSetupError] = useState("");
+  const [savingSetup, setSavingSetup] = useState(false);
+  const responderIdsKey = responderIds.join("\u0000");
+  useEffect(() => {
+    if (!desktopConfiguration) return;
+    setDevice(desktopConfiguration.device || "H808S");
+    setWearer(desktopConfiguration.wearer || "Firefighter 1");
+    setResponderId(desktopConfiguration.responder_id || responderIds[0] || "");
+  }, [
+    desktopConfiguration?.device,
+    desktopConfiguration?.wearer,
+    desktopConfiguration?.responder_id,
+    responderIdsKey,
+  ]);
   useEffect(() => {
     let disposed = false;
     let timer: number | undefined;
@@ -56,6 +90,19 @@ export function HeartRatePanel({ selectedResponderId }: Props) {
 
   const assigned = heartRateMatchesResponder(snapshot, selectedResponderId);
   const live = assigned && online && snapshot?.status === "connected" && snapshot.bpm !== null;
+  const submitSetup = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!onConfigure) return;
+    setSavingSetup(true);
+    setSetupError("");
+    try {
+      await onConfigure(device, wearer, responderId);
+    } catch (error) {
+      setSetupError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSavingSetup(false);
+    }
+  };
   return (
     <section className="side-panel heart-rate-panel" aria-label="Heart rate">
       <div className="heart-rate-heading">
@@ -77,6 +124,67 @@ export function HeartRatePanel({ selectedResponderId }: Props) {
       {online && snapshot?.status === "disabled" ?
         <p className="heart-rate-caption">Configure the H808S on the backend to receive readings.</p> : null}
       {online && snapshot?.error ? <p className="heart-rate-caption">{snapshot.error}</p> : null}
+      {onConfigure ? (
+        <details className="heart-rate-setup" open={!desktopConfiguration?.configured}>
+          <summary>Heart-rate sensor setup</summary>
+          <form onSubmit={(event) => void submitSetup(event)}>
+            <label>
+              Device name or identifier
+              <input
+                value={device}
+                maxLength={200}
+                placeholder="H808S"
+                onChange={(event) => setDevice(event.target.value)}
+              />
+            </label>
+            <label>
+              Wearer label
+              <input
+                value={wearer}
+                maxLength={100}
+                onChange={(event) => setWearer(event.target.value)}
+              />
+            </label>
+            <label>
+              Responder
+              <select
+                value={responderId}
+                required
+                onChange={(event) => setResponderId(event.target.value)}
+              >
+                {responderIds.map((id) => <option key={id} value={id}>{id}</option>)}
+              </select>
+            </label>
+            <div className="heart-rate-setup-actions">
+              <button type="submit" disabled={savingSetup || !device.trim() || !responderId}>
+                {savingSetup ? "Connecting…" : "Connect / update"}
+              </button>
+              {desktopConfiguration?.configured ? (
+                <button
+                  type="button"
+                  disabled={savingSetup}
+                  onClick={() => {
+                    if (!onConfigure) return;
+                    setSavingSetup(true);
+                    setSetupError("");
+                    void onConfigure("", wearer, responderId)
+                      .catch((error) => setSetupError(
+                        error instanceof Error ? error.message : String(error),
+                      ))
+                      .finally(() => setSavingSetup(false));
+                  }}
+                >
+                  Disconnect
+                </button>
+              ) : null}
+            </div>
+            <p className="heart-rate-caption">
+              Wear and moisten the strap first. The app reconnects automatically and remembers this setup.
+            </p>
+            {setupError ? <p className="hr-warning" role="alert">{setupError}</p> : null}
+          </form>
+        </details>
+      ) : null}
       {assigned ? (
         <HeartRateGraph points={snapshot?.monitor?.history ?? []} nowUs={nowUs} />
       ) : null}

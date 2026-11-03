@@ -84,6 +84,47 @@ def _responder_config_path() -> Path:
     return destination
 
 
+def _heart_rate_config_path() -> Path:
+    return _app_support_dir() / "heart_rate.json"
+
+
+def _default_heart_rate_config(responder_ids: list[str]) -> dict[str, str]:
+    return {
+        "device": "",
+        "wearer": "Firefighter 1",
+        "responder_id": responder_ids[0] if responder_ids else "",
+    }
+
+
+def _load_heart_rate_config(path: Path, responder_ids: list[str]) -> dict[str, str]:
+    fallback = _default_heart_rate_config(responder_ids)
+    try:
+        decoded = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return fallback
+    if not isinstance(decoded, dict):
+        return fallback
+    device = decoded.get("device")
+    wearer = decoded.get("wearer")
+    responder_id = decoded.get("responder_id")
+    if not all(isinstance(value, str) for value in (device, wearer, responder_id)):
+        return fallback
+    if responder_id not in responder_ids:
+        responder_id = fallback["responder_id"]
+    return {
+        "device": device.strip(),
+        "wearer": wearer.strip() or fallback["wearer"],
+        "responder_id": responder_id,
+    }
+
+
+def _save_heart_rate_config(path: Path, config: dict[str, str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(path)
+
+
 def _responder_entries(path: Path) -> list[dict[str, object]]:
     decoded = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(decoded, dict) or not isinstance(decoded.get("responders"), list):
@@ -270,6 +311,12 @@ class HostController:
         self.mode = "simulation"
         self.port = _available_tcp_port()
         self.responder_config = _responder_config_path()
+        self.responder_ids = _configured_responder_ids(self.responder_config)
+        self.heart_rate_config_path = _heart_rate_config_path()
+        self.heart_rate_config = _load_heart_rate_config(
+            self.heart_rate_config_path,
+            self.responder_ids,
+        )
         self.backend: subprocess.Popen[str] | None = None
         self.adapter: subprocess.Popen[str] | None = None
         self.tunnel: subprocess.Popen[str] | None = None
@@ -292,7 +339,11 @@ class HostController:
                 "local_url": f"http://{_lan_address()}:{self.port}",
                 "public_url": self.public_url,
                 "imu_mount_calibrated": _imu_mount_calibrated(self.responder_config),
-                "responder_ids": _configured_responder_ids(self.responder_config),
+                "responder_ids": self.responder_ids,
+                "heart_rate": {
+                    **self.heart_rate_config,
+                    "configured": bool(self.heart_rate_config["device"]),
+                },
             }
 
     def start(self, mode: str = "simulation") -> dict[str, object]:
@@ -313,6 +364,17 @@ class HostController:
         timestamp = time.strftime("%Y%m%d-%H%M%S")
         backend_log = (_log_dir() / f"backend-{timestamp}.log").open("a", encoding="utf-8")
         self._log_handles.append(backend_log)
+        backend_environment = os.environ.copy()
+        for variable in ("E014_HR_DEVICE", "E014_HR_WEARER", "E014_HR_RESPONDER_ID"):
+            backend_environment.pop(variable, None)
+        if self.heart_rate_config["device"]:
+            backend_environment.update(
+                {
+                    "E014_HR_DEVICE": self.heart_rate_config["device"],
+                    "E014_HR_WEARER": self.heart_rate_config["wearer"],
+                    "E014_HR_RESPONDER_ID": self.heart_rate_config["responder_id"],
+                }
+            )
         self.backend = subprocess.Popen(
             _child_command(
                 "--backend-child",
@@ -324,6 +386,7 @@ class HostController:
             stdout=backend_log,
             stderr=subprocess.STDOUT,
             text=True,
+            env=backend_environment,
         )
         if mode == "udp":
             adapter_log = (_log_dir() / f"adapter-{timestamp}.log").open("a", encoding="utf-8")
@@ -337,6 +400,35 @@ class HostController:
             )
         self._wait_for_backend(mode)
         return self.get_status()
+
+    def configure_heart_rate(
+        self,
+        device: str,
+        wearer: str,
+        responder_id: str,
+    ) -> dict[str, object]:
+        if not all(isinstance(value, str) for value in (device, wearer, responder_id)):
+            raise TypeError("Heart-rate configuration values must be text")
+        normalized_device = device.strip()
+        normalized_wearer = wearer.strip() or "Wearer"
+        normalized_responder = responder_id.strip()
+        if len(normalized_device) > 200 or len(normalized_wearer) > 100:
+            raise ValueError("Heart-rate device or wearer name is too long")
+        if normalized_device and normalized_responder not in self.responder_ids:
+            raise ValueError("Select a configured responder for the heart-rate strap")
+        config = {
+            "device": normalized_device,
+            "wearer": normalized_wearer,
+            "responder_id": normalized_responder,
+        }
+        _save_heart_rate_config(self.heart_rate_config_path, config)
+        with self._lock:
+            self.heart_rate_config = config
+            mode = self.mode
+            running = self.backend is not None and self.backend.poll() is None
+            if running:
+                self._stop_locked()
+        return self.start(mode) if running else self.get_status()
 
     def calibrate_imu_mount(self, responder_id: str) -> dict[str, object]:
         with self._lock:

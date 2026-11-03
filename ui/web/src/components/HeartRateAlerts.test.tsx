@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { HeartRateMonitor } from "../api/heartRate";
 import { HeartRateAlerts } from "./HeartRateAlerts";
 import { HeartRateGraph } from "./HeartRateGraph";
+import { HeartRatePanel } from "./HeartRatePanel";
 
 const base: HeartRateMonitor = {
   settings: { enabled: true, low_bpm: 50, high_bpm: 160, low_duration_s: 30,
@@ -33,5 +34,20 @@ describe("heart-rate monitor presentation", () => {
     const html = renderToStaticMarkup(<HeartRateGraph points={[]} nowUs={300_000_000} />);
     expect(html).toContain("Waiting for valid readings");
     expect(html).not.toContain("polyline");
+  });
+  it("offers saved desktop sensor setup without a terminal", () => {
+    const html = renderToStaticMarkup(<HeartRatePanel
+      desktopConfiguration={{
+        device: "",
+        wearer: "Firefighter 1",
+        responder_id: "firefighter_1",
+        configured: false,
+      }}
+      responderIds={["firefighter_1"]}
+      onConfigure={async () => undefined}
+    />);
+    expect(html).toContain("Heart-rate sensor setup");
+    expect(html).toContain("Connect / update");
+    expect(html).toContain("firefighter_1");
   });
 });

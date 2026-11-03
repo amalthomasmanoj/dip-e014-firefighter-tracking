@@ -81,8 +81,9 @@ has been estimated. Check http://localhost:8000/heart-rate for telemetry directl
 
 Keep the wearer near the laptop for initial testing. Range depends on the radio,
 body obstruction, and building; distant tracking needs a wearable network gateway.
-This displays BPM telemetry, not raw ECG, and does not add alarm thresholds or
-heart-rate recording to the existing MCAP/localization contracts.
+This displays BPM telemetry, not raw ECG. The optional dashboard thresholds are
+prototype responder-check alerts; heart-rate samples and alerts are not written
+to the existing MCAP/localization contracts.
 
 `received_timestamp_us` is the laptop wall-clock arrival time. The standard BLE
 measurement used here does not provide a device measurement timestamp.
@@ -94,6 +95,19 @@ confirm BPM disappears. Return within range and confirm it reconnects. Test agai
 with UWB/IMU stopped to confirm heart rate remains independent of localization.
 Hardware behavior must be validated on your MacBook; automated tests use synthetic
 Bluetooth packets and a fake transport, not a physical H808S.
+
+## Packaged desktop app
+
+The packaged macOS and Windows apps include the BLE dependency and do not require
+the Terminal setup above. Open **Heart-rate sensor setup** in the dashboard,
+enter the advertised name (`H808S`) or its platform identifier, add the wearer
+label, select the responder, and click **Connect / update**. The app saves this
+assignment in its local Application Support data and reconnects on later launches.
+Use **Disconnect** in the same section to disable BLE heart-rate collection.
+
+On macOS, approve the Bluetooth permission prompt. On Windows, Bluetooth must be
+enabled and the standard WebView2 runtime must be available. Close phone/watch
+apps that may already hold the strap connection on either platform.
 
 ## HR graph and responder-check alerts
 
@@ -123,10 +137,10 @@ invalidate a reading.
 On disconnection, stale data, or poor contact, the high/low episode is marked
 **data became unavailable**, not recovered. A separate signal-loss event follows
 when valid data has been absent for the configured delay (minimum five seconds).
-Monitoring requires a configured `E014_HR_DEVICE`; a deliberately disabled receiver
-does not generate a signal-loss event. Real readings are required to recover
-from signal loss. Sustained abnormal readings after reconnection start a new
-persistence period.
+Monitoring requires a configured sensor, either through the packaged app or
+`E014_HR_DEVICE`; a deliberately disabled receiver does not generate a
+signal-loss event. Real readings are required to recover from signal loss.
+Sustained abnormal readings after reconnection start a new persistence period.
 
 **Acknowledge / silence** records acknowledgement and silences browser sound for
 that event; it does not change the physiological condition or reset detection.

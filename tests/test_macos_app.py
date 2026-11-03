@@ -8,6 +8,8 @@ from desktop.macos_app import (
     _available_tcp_port,
     _cloudflared_download_name,
     _imu_mount_calibrated,
+    _load_heart_rate_config,
+    _save_heart_rate_config,
     _save_imu_mount_calibration,
 )
 
@@ -52,3 +54,30 @@ def test_windows_cloudflared_download_uses_executable(
     monkeypatch.setattr(sys, "platform", "win32")
 
     assert _cloudflared_download_name() == "cloudflared-windows-amd64.exe"
+
+
+def test_heart_rate_configuration_round_trip(tmp_path: Path) -> None:
+    path = tmp_path / "heart_rate.json"
+    config = {
+        "device": " H808S ",
+        "wearer": " Firefighter Min ",
+        "responder_id": "firefighter_1",
+    }
+
+    _save_heart_rate_config(path, config)
+
+    assert _load_heart_rate_config(path, ["firefighter_1"]) == {
+        "device": "H808S",
+        "wearer": "Firefighter Min",
+        "responder_id": "firefighter_1",
+    }
+
+
+def test_heart_rate_configuration_reassigns_removed_responder(tmp_path: Path) -> None:
+    path = tmp_path / "heart_rate.json"
+    _save_heart_rate_config(
+        path,
+        {"device": "H808S", "wearer": "Min", "responder_id": "removed"},
+    )
+
+    assert _load_heart_rate_config(path, ["firefighter_1"])["responder_id"] == "firefighter_1"

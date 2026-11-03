@@ -11,6 +11,13 @@ upright and still for a few seconds, then click **Calibrate Upright IMU**. The a
 measures and saves the sensor-to-body rotation under Application Support and
 reuses it on later launches. Recalibrate after changing the physical mounting.
 
+The **Heart rate** panel has its own sensor setup. Wear and moisten the H808S,
+enter its advertised name (`H808S`) or identifier, choose the responder, and
+click **Connect / update**. The app saves this assignment and starts the BLE
+receiver automatically on later launches; no environment variables or Terminal
+commands are needed. Heart rate remains independent of the Simulation/Real
+Sensors selector so it can be demonstrated with either position source.
+
 **Share Publicly** starts a free Cloudflare Quick Tunnel and copies its HTTPS URL.
 The URL is temporary, changes when the tunnel restarts, and is not an uptime-backed
 deployment. Anyone with that URL can view the telemetry, so stop the app after a

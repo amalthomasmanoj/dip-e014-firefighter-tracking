@@ -25,4 +25,12 @@ cd "$repo_root"
   --collect-submodules webview \
   desktop/macos_app.py
 
+app_plist="$repo_root/dist/E014 Firefighter Tracking.app/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c \
+  "Add :NSBluetoothAlwaysUsageDescription string Connect to the firefighter heart-rate strap." \
+  "$app_plist" 2>/dev/null || /usr/libexec/PlistBuddy -c \
+  "Set :NSBluetoothAlwaysUsageDescription Connect to the firefighter heart-rate strap." \
+  "$app_plist"
+codesign --force --deep --sign - "$repo_root/dist/E014 Firefighter Tracking.app"
+
 echo "Built: $repo_root/dist/E014 Firefighter Tracking.app"

@@ -20,7 +20,10 @@ import { BuildingMap } from "./components/BuildingMap/BuildingMap";
 import { DigitalTwinView } from "./components/DigitalTwinView";
 import { ExperimentPlot } from "./components/ExperimentPlot";
 import { SensorStatus } from "./components/SensorStatus";
-import { HeartRatePanel } from "./components/HeartRatePanel";
+import {
+  DesktopHeartRateConfiguration,
+  HeartRatePanel,
+} from "./components/HeartRatePanel";
 import { StatePanel } from "./components/StatePanel";
 import { appendSimulationTracks, fetchSimulation, FirefighterTrack, SimulationSnapshot } from "./api/simulation";
 import { SimulationControls } from "./components/SimulationControls";
@@ -41,6 +44,7 @@ type DesktopHostStatus = {
   public_url: string | null;
   imu_mount_calibrated: boolean;
   responder_ids: string[];
+  heart_rate: DesktopHeartRateConfiguration;
 };
 
 type DesktopHostApi = {
@@ -48,6 +52,11 @@ type DesktopHostApi = {
   switch_mode: (mode: "simulation" | "udp") => Promise<DesktopHostStatus>;
   share_publicly: () => Promise<DesktopHostStatus>;
   calibrate_imu_mount: (responderId: string) => Promise<DesktopHostStatus>;
+  configure_heart_rate: (
+    device: string,
+    wearer: string,
+    responderId: string,
+  ) => Promise<DesktopHostStatus>;
   open_logs: () => Promise<void>;
 };
 
@@ -179,6 +188,25 @@ export default function App() {
       setSelectedLiveTag("");
     } catch (error) {
       setDesktopError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setDesktopAction("");
+    }
+  };
+
+  const configureDesktopHeartRate = async (
+    device: string,
+    wearer: string,
+    responderId: string,
+  ) => {
+    const api = window.pywebview?.api;
+    if (!api || desktopAction) return;
+    setDesktopAction(device ? "Connecting heart-rate sensor…" : "Disconnecting heart-rate sensor…");
+    setDesktopError("");
+    try {
+      setDesktopHost(await api.configure_heart_rate(device, wearer, responderId));
+    } catch (error) {
+      setDesktopError(error instanceof Error ? error.message : String(error));
+      throw error;
     } finally {
       setDesktopAction("");
     }
@@ -389,7 +417,7 @@ export default function App() {
       {desktopApp ? (
         <section className="desktop-host-bar" aria-label="Desktop host controls">
           <div>
-            <strong>Mac host</strong>
+            <strong>Desktop host</strong>
             <span>{desktopAction || desktopHost?.status || "Connecting…"}</span>
           </div>
           <label htmlFor="desktop-source">Data source</label>
@@ -506,9 +534,10 @@ export default function App() {
               : undefined}
           />
           <HeartRatePanel
-            selectedResponderId={source === "simulation"
-              ? selectedTag
-              : source === "live" ? selectedTrack?.node_id : undefined}
+            selectedResponderId={source === "live" ? selectedTrack?.node_id : undefined}
+            desktopConfiguration={desktopApp ? desktopHost?.heart_rate : undefined}
+            responderIds={desktopApp ? desktopHost?.responder_ids : undefined}
+            onConfigure={desktopApp ? configureDesktopHeartRate : undefined}
           />
           <SensorStatus
             state={source === "live" ? currentState : visualizedState}

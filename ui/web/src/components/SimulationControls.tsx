@@ -1,10 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SimulationSnapshot, sendSimulationCommand } from "../api/simulation";
 
-type Props = { snapshot: SimulationSnapshot | null; online: boolean };
+type Props = {
+  snapshot: SimulationSnapshot | null;
+  online: boolean;
+  target: string;
+  onTargetChange: (target: string) => void;
+};
 
-export function SimulationControls({ snapshot, online }: Props) {
-  const [target, setTarget] = useState("firefighter:sim_tag_10");
+export function simulationFirefighterId(target: string): string | null {
+  const prefix = "firefighter:";
+  return target.startsWith(prefix) ? target.slice(prefix.length) : null;
+}
+
+export function SimulationControls({ snapshot, online, target, onTargetChange }: Props) {
   const [error, setError] = useState<string | null>(null);
   const pending = useRef(false);
   const separator = target.indexOf(":");
@@ -53,8 +62,8 @@ export function SimulationControls({ snapshot, online }: Props) {
   return <section className="side-panel simulation-controls">
     <h2>Simulation controls</h2>
     <p>Two firefighters · movable anchors</p>
-    <label htmlFor="simulation-target">Move</label>
-    <select id="simulation-target" value={target} onChange={(event) => setTarget(event.target.value)}>
+    <label htmlFor="simulation-target">Control</label>
+    <select id="simulation-target" value={target} onChange={(event) => onTargetChange(event.target.value)}>
       {(snapshot?.firefighters ?? []).map((tag) =>
         <option key={tag.node_id} value={`firefighter:${tag.node_id}`}>{tag.label}</option>)}
       {(snapshot?.anchors ?? []).map((anchor) =>

@@ -40,6 +40,7 @@ type AvatarParts = {
 const FIREFIGHTER_MODEL_URL = "/models/professional-firefighter.glb";
 const FIREFIGHTER_DISPLAY_HEIGHT_M = 1.72;
 const BUILDING_WALL_HEIGHT_M = 1.25;
+const CAMERA_FIT_SCALE = 0.60;
 let firefighterModelPromise: Promise<THREE.Group> | null = null;
 let firefighterModelWarningShown = false;
 
@@ -726,7 +727,7 @@ export function DigitalTwinView({
       camera.aspect = clientWidth / Math.max(clientHeight, 1);
       const verticalFov = THREE.MathUtils.degToRad(camera.fov);
       const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
-      const distance = Math.max(4, cameraSpanM * 0.68)
+      const distance = Math.max(4, cameraSpanM * CAMERA_FIT_SCALE)
         / Math.sin(Math.min(verticalFov, horizontalFov) / 2);
       camera.position.copy(cameraTarget).add(
         new THREE.Vector3(0.45, 0.65, 1).normalize().multiplyScalar(distance),

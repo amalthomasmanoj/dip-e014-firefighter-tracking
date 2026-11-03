@@ -26,7 +26,7 @@ import {
 } from "./components/HeartRatePanel";
 import { StatePanel } from "./components/StatePanel";
 import { appendSimulationTracks, fetchSimulation, FirefighterTrack, SimulationSnapshot } from "./api/simulation";
-import { SimulationControls } from "./components/SimulationControls";
+import { SimulationControls, simulationFirefighterId } from "./components/SimulationControls";
 import {
   Anchor,
   BackendSource,
@@ -94,6 +94,7 @@ export default function App() {
   const [liveTracks, setLiveTracks] = useState<LiveFirefighterTrack[]>([]);
   const [simulationOnline, setSimulationOnline] = useState(false);
   const [selectedTag, setSelectedTag] = useState("sim_tag_10");
+  const [simulationTarget, setSimulationTarget] = useState("firefighter:sim_tag_10");
   const [selectedLiveTag, setSelectedLiveTag] = useState("");
   const [source, setSource] = useState<BackendSource | null>(null);
   const [liveUwb, setLiveUwb] = useState<LiveUwbSnapshot>(emptyLiveUwbSnapshot);
@@ -411,6 +412,11 @@ export default function App() {
   const visualizedTrajectory = source === "live" && !livePositionResolved
     ? []
     : activeTrajectory;
+  const selectSimulationTarget = (target: string) => {
+    setSimulationTarget(target);
+    const firefighterId = simulationFirefighterId(target);
+    if (firefighterId !== null) setSelectedTag(firefighterId);
+  };
 
   return (
     <main className="app-shell">
@@ -504,13 +510,12 @@ export default function App() {
         </div>
         <aside className="sidebar">
           {source === "simulation" ? <>
-            <SimulationControls snapshot={simulation} online={simulationOnline} />
-            <section className="side-panel">
-              <label htmlFor="inspected-firefighter">Inspect firefighter</label>
-              <select id="inspected-firefighter" value={selectedTag} onChange={(event) => setSelectedTag(event.target.value)}>
-                {tracks.map((tag) => <option key={tag.node_id} value={tag.node_id}>{tag.label}</option>)}
-              </select>
-            </section>
+            <SimulationControls
+              snapshot={simulation}
+              online={simulationOnline}
+              target={simulationTarget}
+              onTargetChange={selectSimulationTarget}
+            />
           </> : null}
           {source === "live" && liveTracks.length > 1 ? (
             <section className="side-panel">

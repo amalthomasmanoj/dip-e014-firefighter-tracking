@@ -1,7 +1,8 @@
 import { AnchorLink, FirefighterTrack } from "../api/simulation";
-import { useEffect, useRef, type MutableRefObject } from "react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { buildingFootprintFromAnchors } from "./buildingFootprint";
 import {
   Anchor,
@@ -588,6 +589,12 @@ export function DigitalTwinView({
   source,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const viewControlsRef = useRef<{
+    zoomIn: () => void;
+    zoomOut: () => void;
+    reset: () => void;
+  } | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const stateRef = useRef(state);
   const firefightersRef = useRef(firefighters);
   const linksRef = useRef(anchorLinks ?? []);
@@ -603,6 +610,20 @@ export function DigitalTwinView({
     anchorsRef.current = anchors;
     rangesRef.current = liveUwb?.ranges ?? [];
   }, [anchors, liveUwb?.ranges, state, trajectory, firefighters, anchorLinks]);
+
+  useEffect(() => {
+    if (!expanded) return;
+    const previousOverflow = document.body.style.overflow;
+    const exitOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setExpanded(false);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", exitOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", exitOnEscape);
+    };
+  }, [expanded]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -635,6 +656,13 @@ export function DigitalTwinView({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     activeContainer.appendChild(renderer.domElement);
+    const orbitControls = new OrbitControls(camera, renderer.domElement);
+    orbitControls.enableDamping = true;
+    orbitControls.dampingFactor = 0.08;
+    orbitControls.minDistance = 1.5;
+    orbitControls.maxDistance = 80;
+    orbitControls.maxPolarAngle = Math.PI * 0.48;
+    orbitControls.screenSpacePanning = true;
 
     const hemiLight = new THREE.HemisphereLight(0xffffff, 0x8fa1b2, 1.6);
     const keyLight = new THREE.DirectionalLight(0xffffff, 1.4);
@@ -721,9 +749,8 @@ export function DigitalTwinView({
       });
     }
 
-    function resize() {
+    function fitCamera() {
       const { clientWidth, clientHeight } = activeContainer;
-      renderer.setSize(clientWidth, clientHeight, false);
       camera.aspect = clientWidth / Math.max(clientHeight, 1);
       const verticalFov = THREE.MathUtils.degToRad(camera.fov);
       const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
@@ -732,9 +759,33 @@ export function DigitalTwinView({
       camera.position.copy(cameraTarget).add(
         new THREE.Vector3(0.45, 0.65, 1).normalize().multiplyScalar(distance),
       );
-      camera.lookAt(cameraTarget);
+      orbitControls.target.copy(cameraTarget);
+      orbitControls.update();
       camera.updateProjectionMatrix();
     }
+
+    function resize() {
+      const { clientWidth, clientHeight } = activeContainer;
+      renderer.setSize(clientWidth, clientHeight, false);
+      fitCamera();
+    }
+
+    function zoomCamera(factor: number) {
+      const offset = camera.position.clone().sub(orbitControls.target);
+      const distance = THREE.MathUtils.clamp(
+        offset.length() * factor,
+        orbitControls.minDistance,
+        orbitControls.maxDistance,
+      );
+      camera.position.copy(orbitControls.target).add(offset.setLength(distance));
+      orbitControls.update();
+    }
+
+    viewControlsRef.current = {
+      zoomIn: () => zoomCamera(0.78),
+      zoomOut: () => zoomCamera(1.28),
+      reset: fitCamera,
+    };
 
     function syncBuildingOutline() {
       clearVisualGroup(buildingGroup);
@@ -929,6 +980,7 @@ export function DigitalTwinView({
           child.position.lerpVectors(child.userData.start, child.userData.end, phase < 0.5 ? phase * 2 : 2 - phase * 2);
         }
       });
+      orbitControls.update();
       renderer.render(scene, camera);
       animationFrame = window.requestAnimationFrame(animate);
     }
@@ -938,6 +990,8 @@ export function DigitalTwinView({
     return () => {
       window.cancelAnimationFrame(animationFrame);
       resizeObserver.disconnect();
+      orbitControls.dispose();
+      viewControlsRef.current = null;
       avatar.disposed = true;
       firefighterVisuals.forEach((visual) => {
         visual.avatar.disposed = true;
@@ -949,18 +1003,33 @@ export function DigitalTwinView({
   }, []);
 
   return (
-    <section className="twin-panel">
+    <section className={`twin-panel${expanded ? " expanded" : ""}`}>
       <div className="twin-header">
         <h2>Digital Twin</h2>
-        <span className="twin-activity">
-          {firefighters ? `${firefighters.length} firefighters · ${source === "live" ? "live" : "simulation"}` : state
-            ? state.activity.posture === "lying_down"
-              ? `LYING DOWN · ${state.activity.motion}`
-              : `${state.activity.posture} ${state.activity.motion}`
-            : liveUwb?.tag_present
-              ? `tag detected · ${usableAnchorCount}/3 mapped anchors`
-              : "waiting for tag"}
-        </span>
+        <div className="twin-header-actions">
+          <span className="twin-activity">
+            {firefighters ? `${firefighters.length} firefighters · ${source === "live" ? "live" : "simulation"}` : state
+              ? state.activity.posture === "lying_down"
+                ? `LYING DOWN · ${state.activity.motion}`
+                : `${state.activity.posture} ${state.activity.motion}`
+              : liveUwb?.tag_present
+                ? `tag detected · ${usableAnchorCount}/3 mapped anchors`
+                : "waiting for tag"}
+          </span>
+          <div className="twin-view-actions" aria-label="Digital Twin view controls">
+            <button type="button" aria-label="Zoom in" title="Zoom in" onClick={() => viewControlsRef.current?.zoomIn()}>+</button>
+            <button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => viewControlsRef.current?.zoomOut()}>−</button>
+            <button type="button" title="Reset 3D view" onClick={() => viewControlsRef.current?.reset()}>Reset</button>
+            <button
+              type="button"
+              aria-pressed={expanded}
+              title={expanded ? "Exit expanded view (Esc)" : "Expand Digital Twin"}
+              onClick={() => setExpanded((value) => !value)}
+            >
+              {expanded ? "Collapse" : "Expand"}
+            </button>
+          </div>
+        </div>
       </div>
       {liveUwb?.ranges.length ? (
         <div className="twin-range-strip">
@@ -971,7 +1040,9 @@ export function DigitalTwinView({
           ))}
         </div>
       ) : null}
-      <div className="twin-canvas" ref={containerRef} />
+      <div className="twin-canvas" ref={containerRef}>
+        <span className="twin-navigation-hint">Scroll/pinch to zoom · drag to rotate · right-drag to pan</span>
+      </div>
     </section>
   );
 }

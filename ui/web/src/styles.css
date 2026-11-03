@@ -247,6 +247,16 @@ body {
   overflow: hidden;
 }
 
+.twin-panel.expanded {
+  border-radius: 10px;
+  box-shadow: 0 18px 60px rgba(15, 28, 42, 0.32);
+  height: calc(100vh - 24px);
+  inset: 12px;
+  min-height: 0;
+  position: fixed;
+  z-index: 1000;
+}
+
 .twin-header {
   align-items: center;
   border-bottom: 1px solid #e2e8ef;
@@ -259,6 +269,33 @@ body {
 .twin-header h2 {
   font-size: 16px;
   margin: 0;
+}
+
+.twin-header-actions {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.twin-view-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.twin-view-actions button {
+  background: #f5f9fd;
+  border: 1px solid #b9c9d8;
+  border-radius: 5px;
+  color: #243447;
+  cursor: pointer;
+  font: inherit;
+  min-width: 32px;
+  padding: 6px 8px;
+}
+
+.twin-view-actions button:hover {
+  background: #e8f2fb;
+  border-color: #79a8d1;
 }
 
 .twin-activity {
@@ -275,6 +312,25 @@ body {
 .twin-canvas {
   flex: 1;
   min-height: 328px;
+  position: relative;
+}
+
+.twin-panel.expanded .twin-canvas {
+  min-height: 0;
+}
+
+.twin-navigation-hint {
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid #d8e2eb;
+  border-radius: 5px;
+  bottom: 10px;
+  color: #627083;
+  font-size: 11px;
+  left: 12px;
+  padding: 5px 8px;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
 }
 
 .twin-range-strip {
@@ -525,6 +581,23 @@ dd {
 
   .twin-canvas {
     min-height: 288px;
+  }
+
+  .twin-header {
+    align-items: flex-start;
+  }
+
+  .twin-header-actions {
+    align-items: flex-end;
+    flex-direction: column;
+  }
+
+  .twin-activity {
+    font-size: 10px;
+  }
+
+  .twin-view-actions button {
+    padding: 5px 7px;
   }
 }
 

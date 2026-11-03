@@ -1,6 +1,8 @@
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { buildingFootprintFromAnchors } from "./buildingFootprint";
+import { DigitalTwinView } from "./DigitalTwinView";
 
 describe("buildingFootprintFromAnchors", () => {
   it("does not invent a building before the anchor map exists", () => {
@@ -22,5 +24,23 @@ describe("buildingFootprintFromAnchors", () => {
     expect(footprint?.centerY).toBeCloseTo(4.5);
     expect(footprint?.width).toBeCloseTo(7.2);
     expect(footprint?.depth).toBeCloseTo(6.2);
+  });
+
+  it("exposes zoom, reset, and expanded-view controls", () => {
+    const html = renderToStaticMarkup(
+      <DigitalTwinView
+        anchors={[]}
+        state={null}
+        trajectory={[]}
+        liveUwb={null}
+        usableAnchorCount={0}
+      />,
+    );
+
+    expect(html).toContain('aria-label="Zoom in"');
+    expect(html).toContain('aria-label="Zoom out"');
+    expect(html).toContain("Reset 3D view");
+    expect(html).toContain("Expand Digital Twin");
+    expect(html).toContain("Scroll/pinch to zoom");
   });
 });

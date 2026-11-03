@@ -88,6 +88,28 @@ def _heart_rate_config_path() -> Path:
     return _app_support_dir() / "heart_rate.json"
 
 
+def _host_config_path() -> Path:
+    return _app_support_dir() / "host.json"
+
+
+def _load_host_mode(path: Path) -> str:
+    try:
+        decoded = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return "simulation"
+    mode = decoded.get("mode") if isinstance(decoded, dict) else None
+    return mode if mode in {"simulation", "udp"} else "simulation"
+
+
+def _save_host_mode(path: Path, mode: str) -> None:
+    if mode not in {"simulation", "udp"}:
+        raise ValueError("Data source must be simulation or udp")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps({"mode": mode}, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(path)
+
+
 def _default_heart_rate_config(responder_ids: list[str]) -> dict[str, str]:
     return {
         "device": "",
@@ -308,7 +330,8 @@ class HostController:
     """Own the packaged backend processes and expose safe controls to the WebView."""
 
     def __init__(self) -> None:
-        self.mode = "simulation"
+        self.host_config_path = _host_config_path()
+        self.mode = _load_host_mode(self.host_config_path)
         self.port = _available_tcp_port()
         self.responder_config = _responder_config_path()
         self.responder_ids = _configured_responder_ids(self.responder_config)
@@ -455,11 +478,15 @@ class HostController:
                 responder_id,
                 result.get("imu_sensor_to_body"),
             )
-            self._stop_locked()
-        return self.start("udp")
+            # The live hub has already applied the measured transform and reset
+            # only this responder's estimator. Restarting here would discard the
+            # anchor survey, BLE session, and every other live state cache.
+            return self.get_status()
 
     def switch_mode(self, mode: str) -> dict[str, object]:
-        return self.start(mode)
+        status = self.start(mode)
+        _save_host_mode(self.host_config_path, mode)
+        return status
 
     @staticmethod
     def _udp_port_busy(port: int) -> bool:
@@ -619,7 +646,7 @@ def _run_embedded_app() -> None:
 
     controller = HostController()
     try:
-        controller.start("simulation")
+        controller.start(controller.mode)
         webview.create_window(
             APP_NAME,
             url=f"http://127.0.0.1:{controller.port}/?desktop=1",

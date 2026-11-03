@@ -1,15 +1,20 @@
 import socket
 import sys
+import threading
 from pathlib import Path
+from types import SimpleNamespace
 
 import yaml
 
 from desktop.macos_app import (
+    HostController,
     _available_tcp_port,
     _cloudflared_download_name,
     _imu_mount_calibrated,
     _load_heart_rate_config,
+    _load_host_mode,
     _save_heart_rate_config,
+    _save_host_mode,
     _save_imu_mount_calibration,
 )
 
@@ -81,3 +86,49 @@ def test_heart_rate_configuration_reassigns_removed_responder(tmp_path: Path) ->
     )
 
     assert _load_heart_rate_config(path, ["firefighter_1"])["responder_id"] == "firefighter_1"
+
+
+def test_host_mode_round_trip_and_invalid_fallback(tmp_path: Path) -> None:
+    path = tmp_path / "host.json"
+    assert _load_host_mode(path) == "simulation"
+
+    _save_host_mode(path, "udp")
+    assert _load_host_mode(path) == "udp"
+
+    path.write_text('{"mode": "unknown"}\n', encoding="utf-8")
+    assert _load_host_mode(path) == "simulation"
+
+
+def test_mount_calibration_keeps_live_backend_running(monkeypatch, tmp_path: Path) -> None:
+    controller = HostController.__new__(HostController)
+    controller._lock = threading.RLock()
+    controller.mode = "udp"
+    controller.port = 8123
+    controller.backend = SimpleNamespace(poll=lambda: None)
+    controller.responder_config = tmp_path / "responders.yaml"
+    controller.get_status = lambda: {"running": True, "mode": "udp"}
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def read(self) -> bytes:
+            return b'{"imu_sensor_to_body": [[1,0,0],[0,1,0],[0,0,1]]}'
+
+    monkeypatch.setattr("desktop.macos_app.urllib.request.urlopen", lambda *_a, **_k: Response())
+    saved: list[tuple[Path, str, object]] = []
+    monkeypatch.setattr(
+        "desktop.macos_app._save_imu_mount_calibration",
+        lambda path, responder_id, transform: saved.append((path, responder_id, transform)),
+    )
+    monkeypatch.setattr(
+        controller,
+        "_stop_locked",
+        lambda: (_ for _ in ()).throw(AssertionError("backend must not restart")),
+    )
+
+    assert controller.calibrate_imu_mount("firefighter_1") == {"running": True, "mode": "udp"}
+    assert saved[0][0:2] == (controller.responder_config, "firefighter_1")

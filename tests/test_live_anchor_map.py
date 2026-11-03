@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import json
 
 import pytest
+from fastapi import HTTPException
 
 from backend.api.app import create_app
 from backend.config.source import SourceMode
@@ -194,6 +196,63 @@ def test_tracker_locks_initial_map_during_live_session_by_default() -> None:
     assert tracker.anchors == initial_anchors
 
 
+def test_explicit_resurvey_invalidates_map_and_requires_fresh_stable_ranges() -> None:
+    tracker = LiveAnchorMapTracker(
+        ANCHORS,
+        median_window=3,
+        minimum_samples_per_pair=3,
+        initial_confirmation_sets=2,
+        use_configured_fallback=True,
+    )
+    for cycle in range(4):
+        committed = feed_triangle(
+            tracker,
+            start_sequence=1 + cycle * 3,
+            arrival_time_s=10.0 + cycle * 0.2,
+        )
+    assert committed
+    assert tracker.map_version == 1
+
+    assert tracker.begin_resurvey() == 2
+    assert tracker.anchors == ()
+    snapshot = tracker.snapshot(now_s=11.0)
+    assert snapshot["status"] == "surveying"
+    assert snapshot["links"] == []
+
+    # The pre-resurvey median windows cannot contribute to the replacement.
+    assert not feed_triangle(
+        tracker,
+        start_sequence=20,
+        arrival_time_s=11.2,
+        d13=4.0,
+        d23=5.657,
+    )
+    assert tracker.anchors == ()
+    assert not feed_triangle(
+        tracker,
+        start_sequence=23,
+        arrival_time_s=11.4,
+        d13=4.0,
+        d23=5.657,
+    )
+    assert not feed_triangle(
+        tracker,
+        start_sequence=26,
+        arrival_time_s=11.6,
+        d13=4.0,
+        d23=5.657,
+    )
+    assert feed_triangle(
+        tracker,
+        start_sequence=29,
+        arrival_time_s=11.8,
+        d13=4.0,
+        d23=5.657,
+    )
+    assert tracker.map_version == 3
+    assert tracker.anchors[2].y_m == pytest.approx(4.0, abs=0.02)
+
+
 def test_tracker_rejects_unstable_pair_windows_before_initial_commit() -> None:
     tracker = LiveAnchorMapTracker(
         ANCHORS,
@@ -338,3 +397,27 @@ def test_adapter_to_live_api_commits_surveyed_anchor_coordinates() -> None:
         {"anchor_id": "A3", "x_m": 0.0, "y_m": 3.0, "z_m": 0.0},
     ]
     assert anchor_map_route.endpoint()["map_version"] == 1
+
+    resurvey_route = next(
+        route
+        for route in app.routes
+        if getattr(route, "path", None) == "/uwb/anchor-map/resurvey"
+    )
+    snapshot = asyncio.run(resurvey_route.endpoint())
+    assert snapshot["status"] == "surveying"
+    assert snapshot["map_version"] == 2
+    assert snapshot["anchors"] == []
+    assert anchors_route.endpoint() == []
+
+
+def test_anchor_resurvey_endpoint_rejects_simulation_mode() -> None:
+    app = create_app(source_mode=SourceMode.SIMULATION, anchors=ANCHORS)
+    resurvey_route = next(
+        route
+        for route in app.routes
+        if getattr(route, "path", None) == "/uwb/anchor-map/resurvey"
+    )
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(resurvey_route.endpoint())
+    assert error.value.status_code == 409

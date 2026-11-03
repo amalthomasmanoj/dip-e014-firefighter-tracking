@@ -96,6 +96,17 @@ class LiveUdpStateHub:
             raise KeyError(responder_id)
         estimator.align_heading(heading_rad)
 
+    def begin_anchor_resurvey(self) -> int:
+        if self._anchor_map_tracker is None:
+            raise RuntimeError("live anchor survey is not configured")
+        map_version = self._anchor_map_tracker.begin_resurvey()
+        # Do not emit positions against the previous physical geometry while a
+        # replacement map is being established. Fresh estimators are created
+        # with the new anchors after the survey commits.
+        self._anchors = ()
+        self._estimators.clear()
+        return map_version
+
     def uwb_node_id(self, responder_or_node_id: str) -> str:
         return self._registry.uwb_node_id(responder_or_node_id)
 

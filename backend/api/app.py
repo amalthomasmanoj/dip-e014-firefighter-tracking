@@ -164,6 +164,16 @@ def create_app(
     def uwb_anchor_map() -> dict[str, object]:
         return live_anchor_map.snapshot()
 
+    @app.post("/uwb/anchor-map/resurvey")
+    async def resurvey_anchor_map() -> dict[str, object]:
+        if active_source_mode is not SourceMode.UDP:
+            raise HTTPException(409, "anchor resurvey requires real sensors")
+        try:
+            live_hub.begin_anchor_resurvey()
+        except (RuntimeError, ValueError) as exc:
+            raise HTTPException(422, str(exc)) from exc
+        return live_anchor_map.snapshot()
+
     @app.get("/responders/{responder_id}/sensor-status")
     def responder_sensor_status(responder_id: str) -> dict[str, object]:
         return live_hub.sensor_status(responder_id)

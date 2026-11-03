@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
-import { backendSourceFromHealth } from "./backend";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { backendSourceFromHealth, resurveyLiveAnchorMap } from "./backend";
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe("backend source mapping", () => {
   it("maps UDP to live before any estimator state exists", () => {
@@ -27,5 +29,29 @@ describe("backend source mapping", () => {
         source_status: "not_implemented",
       }),
     ).toBe("replay");
+  });
+
+  it("starts a real anchor resurvey through the dedicated endpoint", async () => {
+    const snapshot = {
+      source: "live",
+      status: "surveying",
+      map_version: 2,
+      frame: "A1_origin_A2_positive_x",
+      reference_anchor_ids: ["A1", "A2", "A3"],
+      anchors: [],
+      links: [],
+      last_error: null,
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => snapshot,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(resurveyLiveAnchorMap()).resolves.toEqual(snapshot);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/uwb/anchor-map/resurvey",
+      { method: "POST" },
+    );
   });
 });

@@ -119,15 +119,34 @@ class LiveAnchorMapTracker:
         self._pending_anchors: tuple[Anchor, ...] | None = None
         self._pending_count = 0
         self._last_error: str | None = None
+        self._resurveying = False
 
     @property
     def anchors(self) -> tuple[Anchor, ...]:
         if self._anchors is not None:
             return self._anchors
+        if self._resurveying:
+            return ()
         return self._configured_anchors if self._use_configured_fallback else ()
 
     @property
     def map_version(self) -> int:
+        return self._map_version
+
+    def begin_resurvey(self) -> int:
+        """Invalidate the installed map and require wholly fresh pair samples."""
+        if len(self._survey_ids) != 3:
+            raise ValueError("anchor resurvey requires exactly three configured anchors")
+        self._anchors = None
+        self._resurveying = True
+        self._map_version += 1
+        for window in self._windows.values():
+            window.clear()
+        self._latest.clear()
+        self._updated_pairs.clear()
+        self._pending_anchors = None
+        self._pending_count = 0
+        self._last_error = None
         return self._map_version
 
     def observe(self, event: IngestedMeasurement) -> bool:
@@ -253,6 +272,7 @@ class LiveAnchorMapTracker:
         # Extra anchors need three surveyed constraints of their own. Exclude
         # them from a relative map rather than mixing old fixed-frame points.
         self._anchors = anchors
+        self._resurveying = False
         self._map_version += 1
         self._pending_anchors = None
         self._pending_count = 0

@@ -16,6 +16,9 @@ type Props = {
   usableAnchorCount: number;
   liveAnchorMap: LiveAnchorMapSnapshot | null;
   liveSensorStatus?: LiveSensorStatus | null;
+  anchorResurveying?: boolean;
+  anchorResurveyError?: string;
+  onResurveyAnchors?: () => void;
 };
 
 export function SensorStatus({
@@ -27,7 +30,11 @@ export function SensorStatus({
   usableAnchorCount,
   liveAnchorMap,
   liveSensorStatus,
+  anchorResurveying = false,
+  anchorResurveyError = "",
+  onResurveyAnchors,
 }: Props) {
+  const surveyInProgress = anchorResurveying || liveAnchorMap?.status === "surveying";
   const liveAnchorCount = liveUwb?.active_anchor_count ?? 0;
   const configuredAnchorIds = new Set(anchors.map((anchor) => anchor.anchor_id));
   const unmappedAnchorIds = liveUwb?.ranges
@@ -84,6 +91,19 @@ export function SensorStatus({
         <p className="sensor-warning">
           Unmapped live anchor{unmappedAnchorIds.length === 1 ? "" : "s"}: {unmappedAnchorIds.join(", ")}. Add measured coordinates to the anchor config.
         </p>
+      ) : null}
+      {source === "live" && onResurveyAnchors ? (
+        <div className="anchor-resurvey">
+          <button
+            type="button"
+            disabled={surveyInProgress || !connected}
+            onClick={onResurveyAnchors}
+          >
+            {surveyInProgress ? "Anchor survey in progress…" : "Resurvey moved anchors"}
+          </button>
+          <p>Use after physically relocating an anchor. Position output pauses until fresh anchor-to-anchor ranges form a stable map.</p>
+          {anchorResurveyError ? <p role="alert" className="sensor-warning">{anchorResurveyError}</p> : null}
+        </div>
       ) : null}
     </section>
   );

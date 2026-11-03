@@ -420,6 +420,34 @@ body {
   line-height: 1.4;
 }
 
+.anchor-resurvey {
+  border-top: 1px solid #e2e8ef;
+  margin-top: 14px;
+  padding-top: 12px;
+}
+
+.anchor-resurvey button {
+  background: #f5f9fd;
+  border: 1px solid #3974a8;
+  border-radius: 5px;
+  color: inherit;
+  cursor: pointer;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.anchor-resurvey button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.anchor-resurvey p {
+  color: #627083;
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 8px 0 0;
+}
+
 .range-list li {
   display: flex;
   justify-content: space-between;

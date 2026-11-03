@@ -7,6 +7,7 @@ import {
   fetchLiveAnchorMap,
   fetchLiveSensorStatus,
   fetchLiveUwbRanges,
+  resurveyLiveAnchorMap,
 } from "./api/backend";
 import { connectStateStream } from "./api/websocket";
 import { backendHttpUrl, isAndroidViewer, savedServerUrl, saveServerUrl } from "./api/server";
@@ -111,6 +112,8 @@ export default function App() {
   );
   const [serverUrlInput, setServerUrlInput] = useState(savedServerUrl() ?? "");
   const [serverUrlError, setServerUrlError] = useState("");
+  const [anchorResurveying, setAnchorResurveying] = useState(false);
+  const [anchorResurveyError, setAnchorResurveyError] = useState("");
 
   const applyServerUrl = () => {
     try {
@@ -210,6 +213,23 @@ export default function App() {
       throw error;
     } finally {
       setDesktopAction("");
+    }
+  };
+
+  const resurveyAnchors = async () => {
+    if (anchorResurveying) return;
+    setAnchorResurveying(true);
+    setAnchorResurveyError("");
+    try {
+      const snapshot = await resurveyLiveAnchorMap();
+      liveMapVersionRef.current = snapshot.map_version;
+      setLiveAnchorMap(snapshot);
+      setAnchors(snapshot.anchors);
+      setLiveTracks([]);
+    } catch (error) {
+      setAnchorResurveyError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setAnchorResurveying(false);
     }
   };
 
@@ -553,6 +573,9 @@ export default function App() {
             usableAnchorCount={usableLiveAnchorCount}
             liveAnchorMap={source === "live" ? liveAnchorMap : null}
             liveSensorStatus={source === "live" ? liveSensorStatus : null}
+            anchorResurveying={anchorResurveying}
+            anchorResurveyError={anchorResurveyError}
+            onResurveyAnchors={source === "live" ? () => void resurveyAnchors() : undefined}
           />
           <ExperimentPlot trajectory={visualizedTrajectory} />
         </aside>

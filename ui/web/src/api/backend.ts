@@ -39,6 +39,17 @@ export async function fetchLiveAnchorMap(): Promise<LiveAnchorMapSnapshot> {
   return response.json() as Promise<LiveAnchorMapSnapshot>;
 }
 
+export async function resurveyLiveAnchorMap(): Promise<LiveAnchorMapSnapshot> {
+  const baseUrl = backendHttpUrl();
+  const response = await fetch(`${baseUrl}/uwb/anchor-map/resurvey`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    throw new Error(`failed to start anchor resurvey: ${response.status}`);
+  }
+  return response.json() as Promise<LiveAnchorMapSnapshot>;
+}
+
 export async function fetchLiveSensorStatus(
   responderId: string,
 ): Promise<LiveSensorStatus> {

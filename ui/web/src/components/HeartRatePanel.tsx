@@ -4,6 +4,8 @@ import {
   heartRateMatchesResponder,
   HeartRateSnapshot,
 } from "../api/heartRate";
+import { HeartRateAlerts } from "./HeartRateAlerts";
+import { HeartRateGraph } from "./HeartRateGraph";
 
 const labels: Record<HeartRateSnapshot["status"], string> = {
   disabled: "Not configured",
@@ -22,11 +24,13 @@ type Props = { selectedResponderId?: string };
 export function HeartRatePanel({ selectedResponderId }: Props) {
   const [snapshot, setSnapshot] = useState<HeartRateSnapshot | null>(null);
   const [online, setOnline] = useState(false);
+  const [nowUs, setNowUs] = useState(Date.now() * 1000);
   useEffect(() => {
     let disposed = false;
     let timer: number | undefined;
     let controller: AbortController | undefined;
     async function refresh() {
+      setNowUs(Date.now() * 1000);
       controller = new AbortController();
       const timeout = window.setTimeout(() => controller?.abort(), 2_000);
       try {
@@ -73,6 +77,12 @@ export function HeartRatePanel({ selectedResponderId }: Props) {
       {online && snapshot?.status === "disabled" ?
         <p className="heart-rate-caption">Configure the H808S on the backend to receive readings.</p> : null}
       {online && snapshot?.error ? <p className="heart-rate-caption">{snapshot.error}</p> : null}
+      {assigned ? (
+        <HeartRateGraph points={snapshot?.monitor?.history ?? []} nowUs={nowUs} />
+      ) : null}
+      {assigned && snapshot?.monitor ? (
+        <HeartRateAlerts monitor={snapshot.monitor} online={online} />
+      ) : null}
     </section>
   );
 }

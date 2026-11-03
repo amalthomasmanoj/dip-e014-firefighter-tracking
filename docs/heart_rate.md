@@ -94,3 +94,78 @@ confirm BPM disappears. Return within range and confirm it reconnects. Test agai
 with UWB/IMU stopped to confirm heart rate remains independent of localization.
 Hardware behavior must be validated on your MacBook; automated tests use synthetic
 Bluetooth packets and a fake transport, not a physical H808S.
+
+## HR graph and responder-check alerts
+
+The heart-rate panel now plots the last five minutes of valid readings. History
+is collected per BLE notification on the backend, including when the browser is
+closed. The trace is split across notification gaps longer than five seconds.
+It does not invent readings during missing periods or smooth raw BPM values.
+
+Open **Configure thresholds** to set low/high limits, a separate persistence
+period for each, a recovery margin (hysteresis), and a signal-loss delay. Tick
+**Enable monitoring**, then **Apply settings**. Alerts start disabled. The initial
+50/160 BPM and 30-second values are editable demonstration settings, not medically
+validated danger limits. There is no BPM/duration rule here that diagnoses
+fainting, unconsciousness, or cardiac arrest. Configure limits for your approved
+prototype test, not for operational rescue decisions.
+
+Only new valid notifications advance the high/low countdown. Repeated dashboard
+polls do not count as new measurements. High means strictly above the upper
+limit; low means strictly below the lower limit. An active high alert recovers
+at or below (high limit - margin); an active low alert recovers at or above
+(low limit + margin). A single valid in-range reading resets a pending timer;
+a missing-data period or lost contact also resets it. A gap over five seconds
+cannot bridge two threshold episodes. Zero BPM is treated as unavailable input,
+not as evidence of cardiac arrest. Missing contact support does not by itself
+invalidate a reading.
+
+On disconnection, stale data, or poor contact, the high/low episode is marked
+**data became unavailable**, not recovered. A separate signal-loss event follows
+when valid data has been absent for the configured delay (minimum five seconds).
+Monitoring requires a configured `E014_HR_DEVICE`; a deliberately disabled receiver
+does not generate a signal-loss event. Real readings are required to recover
+from signal loss. Sustained abnormal readings after reconnection start a new
+persistence period.
+
+**Acknowledge / silence** records acknowledgement and silences browser sound for
+that event; it does not change the physiological condition or reset detection.
+An active alert remains visible until its recovery condition, a data loss, or a
+settings change. Event history records the trigger time, BPM at trigger,
+duration at trigger, acknowledgement, and end reason. Up to 100 events and 3,600
+samples are held in backend memory; the UI lists the latest 20 events and plots
+at most five minutes. Data/settings/events reset when the backend restarts or
+reloads. Changing settings ends the existing episode with **settings changed**
+and requires a fresh confirmation period. Settings are shared by every dashboard
+connected to this backend. There is no file recording/export in this change.
+
+Choose **Enable browser sound** and allow browser audio to hear a short tone
+repeating every five seconds during an unacknowledged active alert. The backend
+evaluates alerts while it is running, but sound/visual notifications require an
+open, functioning dashboard. Browser background throttling and audio policies
+can delay or suppress tones. There are no phone, SMS, or email notifications.
+A backend request failure hides live BPM and reports monitoring status unknown.
+
+### Repeatable test without pushing HR to extremes
+
+Use synthetic packets in automated tests; do not try to induce fainting or
+unsafe heart rates. With the real strap, you can test the mechanics by setting
+an example high limit below your current comfortable resting BPM and a short
+persistence period, then restoring settings/disabling alerts afterward. This
+only demonstrates threshold logic, not detection of a dangerous condition.
+
+1. Confirm a live trace appears, then enable monitoring using your test settings.
+2. Confirm the pending countdown advances with new readings and triggers one event.
+3. Enable browser sound; acknowledge the event and check that it stays visible
+   while the condition persists but the sound stops.
+4. Remove the strap or disconnect it: BPM must disappear, the original episode
+   must not be called recovered, and a separate signal-loss alert must follow.
+5. Reconnect: confirm a new reading is needed, and a new threshold episode needs
+   the full configured persistence period.
+6. Restart the backend: confirm monitoring is disabled and session history resets.
+
+API additions: `POST /heart-rate/settings` accepts the settings shown above;
+`POST /heart-rate/alerts/{event_id}/acknowledge` acknowledges an event.
+`GET /heart-rate` preserves its existing fields and adds `monitor` with settings,
+valid sample history, pending condition, active alert, and event history. The
+shared localization contracts are unchanged.

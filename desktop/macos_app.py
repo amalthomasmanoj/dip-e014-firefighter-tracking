@@ -23,6 +23,7 @@ import yaml
 
 APP_NAME = "E014 Firefighter Tracking"
 QUICK_TUNNEL_PATTERN = re.compile(r"https://[a-z0-9-]+\.trycloudflare\.com")
+_RUNTIME_STREAM: object | None = None
 
 
 def _app_support_dir() -> Path:
@@ -42,6 +43,19 @@ def _log_dir() -> Path:
         path = Path.home() / "Library" / "Logs" / APP_NAME
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def _ensure_packaged_standard_streams() -> None:
+    """Give windowed PyInstaller processes a stream for library logging."""
+    global _RUNTIME_STREAM
+    if not getattr(sys, "frozen", False) or (sys.stdout is not None and sys.stderr is not None):
+        return
+    runtime_log = _log_dir() / f"runtime-{os.getpid()}.log"
+    _RUNTIME_STREAM = runtime_log.open("a", encoding="utf-8", buffering=1)
+    if sys.stdout is None:
+        sys.stdout = _RUNTIME_STREAM  # type: ignore[assignment]
+    if sys.stderr is None:
+        sys.stderr = _RUNTIME_STREAM  # type: ignore[assignment]
 
 
 def _bundled_ui_dist() -> Path:
@@ -529,6 +543,7 @@ def _run_embedded_app() -> None:
 
 
 def main() -> None:
+    _ensure_packaged_standard_streams()
     parser = argparse.ArgumentParser(add_help=not getattr(sys, "frozen", False))
     parser.add_argument(
         "--backend-child",

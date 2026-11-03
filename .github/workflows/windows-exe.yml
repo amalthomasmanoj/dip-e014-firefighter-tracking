@@ -54,6 +54,14 @@ jobs:
               catch {}
             }
             if (-not $healthy) {
+              Write-Host "Packaged process exited: $($process.HasExited)"
+              $logDirectory = Join-Path $env:LOCALAPPDATA "E014 Firefighter Tracking\Logs"
+              if (Test-Path $logDirectory) {
+                Get-ChildItem $logDirectory -File | ForEach-Object {
+                  Write-Host "===== $($_.Name) ====="
+                  Get-Content $_.FullName
+                }
+              }
               throw "Packaged Windows backend did not become healthy"
             }
           }
